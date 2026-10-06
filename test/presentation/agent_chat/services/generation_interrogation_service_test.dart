@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,7 +16,10 @@ import 'package:nai_launcher/core/storage/local_storage_service.dart';
 import 'package:nai_launcher/core/storage/secure_storage_service.dart';
 import 'package:nai_launcher/data/models/agent/agent_settings.dart';
 import 'package:nai_launcher/data/models/precise_ref/precise_ref_library_entry.dart';
+import 'package:nai_launcher/data/services/local_onnx_model_service.dart';
+import 'package:nai_launcher/data/services/local_onnx_tagger_service.dart';
 import 'package:nai_launcher/data/services/precise_ref_library_storage_service.dart';
+import 'package:nai_launcher/core/constants/storage_keys.dart';
 import 'package:nai_launcher/presentation/agent_chat/services/agent_resource_resolver.dart';
 import 'package:nai_launcher/presentation/agent_chat/services/agent_chat_draft_controller.dart';
 import 'package:nai_launcher/presentation/agent_chat/providers/agent_chat_state.dart';
@@ -31,11 +35,25 @@ class _Dio extends Mock implements Dio {}
 class _ReferenceStorage extends Mock
     implements PreciseRefLibraryStorageService {}
 
+class _FakeLocalOnnxModelService extends Mock
+    implements LocalOnnxModelService {}
+
+class _FakeLocalOnnxTaggerService extends Mock
+    implements LocalOnnxTaggerService {}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() {
     registerFallbackValue(Options());
     registerFallbackValue(CancelToken());
+    registerFallbackValue(Uint8List(0));
+    registerFallbackValue(
+      const LocalOnnxModelDescriptor(
+        name: 'fallback.onnx',
+        path: 'fallback.onnx',
+        kind: LocalOnnxModelKind.unknown,
+      ),
+    );
   });
   final png = base64Decode(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
@@ -49,6 +67,15 @@ void main() {
   late ProviderContainer container;
   late AgentTool tool;
   late List<Map<String, dynamic>> requests;
+  late _MemoryStorage storage;
+  late _FakeLocalOnnxModelService localModelService;
+  late _FakeLocalOnnxTaggerService localTaggerService;
+  const localDescriptor = LocalOnnxModelDescriptor(
+    name: 'model.onnx',
+    path: 'models/model.onnx',
+    kind: LocalOnnxModelKind.pixaiTagger,
+    labelsPath: 'models/tags.json',
+  );
 
   setUp(() async {
     final temporaryRoot = await Directory('tool/.tmp').create(recursive: true);
@@ -68,6 +95,9 @@ void main() {
       ],
     );
     requests = [];
+    storage = _MemoryStorage();
+    localModelService = _FakeLocalOnnxModelService();
+    localTaggerService = _FakeLocalOnnxTaggerService();
     final dio = _Dio();
     when(
       () => dio.post<dynamic>(
@@ -95,8 +125,10 @@ void main() {
     container = ProviderContainer(
       overrides: [
         preciseRefLibraryStorageServiceProvider.overrideWithValue(library),
-        localStorageServiceProvider.overrideWithValue(_MemoryStorage()),
+        localStorageServiceProvider.overrideWithValue(storage),
         secureStorageServiceProvider.overrideWithValue(_SecureStorage()),
+        localOnnxModelServiceProvider.overrideWithValue(localModelService),
+        localOnnxTaggerServiceProvider.overrideWithValue(localTaggerService),
         promptAssistantDioProvider.overrideWithValue(dio),
         promptAssistantServiceProvider.overrideWith(
           (ref) => PromptAssistantService(
@@ -209,6 +241,73 @@ void main() {
     }
   });
 
+  test('local interrogation keeps the image on-device', () async {
+    storage.values[StorageKeys.agentLocalInterrogateEnabled] = true;
+    when(
+      () => localModelService.scanTaggerModels(),
+    ).thenAnswer((_) async => const [localDescriptor]);
+    when(
+      () => localTaggerService.tagImage(
+        imageBytes: any(named: 'imageBytes'),
+        model: any(named: 'model'),
+        generalThreshold: any(named: 'generalThreshold'),
+        characterThreshold: any(named: 'characterThreshold'),
+      ),
+    ).thenAnswer(
+      (_) async => const OnnxTaggerResult(model: localDescriptor, tags: [
+        OnnxTaggerTag(name: '1girl', score: 0.9),
+        OnnxTaggerTag(name: 'solo', score: 0.8),
+      ]),
+    );
+
+    final result = await tool.execute('test', {'attachment_index': 1});
+
+    expect(result.isError, isFalse, reason: result.content.toString());
+    expect(
+      result.content.whereType<ToolResultTextContent>().single.text,
+      '1girl, solo',
+    );
+    expect(requests, isEmpty);
+  });
+
+  test(
+    'local interrogation failure never falls back to remote routes',
+    () async {
+      storage.values[StorageKeys.agentLocalInterrogateEnabled] = true;
+      when(
+        () => localModelService.scanTaggerModels(),
+      ).thenAnswer((_) async => const [localDescriptor]);
+      when(
+        () => localTaggerService.tagImage(
+          imageBytes: any(named: 'imageBytes'),
+          model: any(named: 'model'),
+          generalThreshold: any(named: 'generalThreshold'),
+          characterThreshold: any(named: 'characterThreshold'),
+        ),
+      ).thenThrow(StateError('onnx failure'));
+
+      final result = await tool.execute('test', {'attachment_index': 1});
+
+      expect(result.isError, isTrue);
+      expect(requests, isEmpty);
+    },
+  );
+
+  test(
+    'local interrogation without a model reports an error without requests',
+    () async {
+      storage.values[StorageKeys.agentLocalInterrogateEnabled] = true;
+      when(
+        () => localModelService.scanTaggerModels(),
+      ).thenAnswer((_) async => const []);
+
+      final result = await tool.execute('test', {'attachment_index': 1});
+
+      expect(result.isError, isTrue);
+      expect(requests, isEmpty);
+    },
+  );
+
   for (final source in ['attachment', 'resource', 'path']) {
     test(
       '$source reaches the vision adapter with the selected image bytes',
@@ -285,6 +384,10 @@ void main() {
 
 class _MemoryStorage extends LocalStorageService {
   final _values = <String, Object?>{};
+
+  /// Test-visible alias so cases can flip settings directly.
+  Map<String, Object?> get values => _values;
+
   @override
   T? getSetting<T>(String key, {T? defaultValue}) =>
       _values[key] as T? ?? defaultValue;

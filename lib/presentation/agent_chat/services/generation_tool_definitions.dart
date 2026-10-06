@@ -39,10 +39,13 @@ class GenerationToolDefinitions {
         label: 'Interrogate Image',
         description:
             'Reverse-engineer a NovelAI prompt from an image. '
-            'Returns English comma-separated tags. Routing: uses the '
-            'current chat model directly when it supports image input; '
-            'the dedicated "reverse" vision model (Settings > '
-            'Integrations) is only a fallback and is NOT required. '
+            'Returns English comma-separated tags. Routing: when local '
+            'interrogation is enabled in Settings > Integrations, the '
+            'on-device tagger processes the image locally and the image is '
+            'never uploaded; otherwise the current chat model handles it '
+            'directly when it supports image input, and the dedicated '
+            '"reverse" vision model (Settings > Integrations) is only a '
+            'fallback and is NOT required. '
             'Provide exactly one source: attachment_index for an inline image '
             'in the latest user message (1-based in message order), '
             'resource_ref for an application image, or path for an existing '

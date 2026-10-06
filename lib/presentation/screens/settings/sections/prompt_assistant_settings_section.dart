@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import '../../../widgets/common/provider_icon.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/constants/storage_keys.dart';
 import '../../../../core/platform/platform_capabilities.dart';
+import '../../../../core/storage/local_storage_service.dart';
 import '../../../../core/utils/localization_extension.dart';
+import '../../../../data/services/local_onnx_model_service.dart';
 import '../../../adaptive/adaptive_presenter.dart';
 import '../../../prompt_assistant/models/prompt_assistant_models.dart';
 import '../../../prompt_assistant/providers/prompt_assistant_config_provider.dart';
@@ -226,6 +229,9 @@ class PromptAssistantSettingsSection extends ConsumerWidget {
       context: context,
       title: _assistantTaskLabel(context, taskType),
       modelPickerKeyPrefix: 'prompt-route-${taskType.name}-model',
+      footer: taskType == AssistantTaskType.reverse
+          ? _buildLocalInterrogateFooter()
+          : null,
       thinkingField: AssistantTaskThinkingField(
         task: taskType,
         provider: state.providers.where((p) => p.id == providerId).firstOrNull,
@@ -296,6 +302,7 @@ class PromptAssistantSettingsSection extends ConsumerWidget {
     required String? modelValue,
     required List<ModelPickerOption<String>> modelOptions,
     required ValueChanged<String?>? onModelChanged,
+    Widget? footer,
   }) {
     final colors = Theme.of(context).colorScheme;
     return Container(
@@ -343,9 +350,15 @@ class PromptAssistantSettingsSection extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           thinkingField,
+          if (footer != null) ...[const SizedBox(height: 10), footer],
         ],
       ),
     );
+  }
+
+  /// Agent 反推工具的本地开关：仅当设备上已有本地 tagger 模型时出现。
+  Widget _buildLocalInterrogateFooter() {
+    return const _AgentLocalInterrogateSwitch();
   }
 
   Widget _buildProviders(
@@ -803,5 +816,81 @@ class PromptAssistantSettingsSection extends ConsumerWidget {
     }
     if (defaultRule == null) return false;
     return rule.content.trim() == defaultRule.content.trim();
+  }
+}
+
+/// 反推任务路由卡片内的“Agent 本地反推”开关。
+/// 设备上没有任何本地 tagger 模型时整行隐藏。
+class _AgentLocalInterrogateSwitch extends ConsumerStatefulWidget {
+  const _AgentLocalInterrogateSwitch();
+
+  @override
+  ConsumerState<_AgentLocalInterrogateSwitch> createState() =>
+      _AgentLocalInterrogateSwitchState();
+}
+
+class _AgentLocalInterrogateSwitchState
+    extends ConsumerState<_AgentLocalInterrogateSwitch> {
+  late bool _enabled;
+  bool _hasLocalModels = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final storage = ref.read(localStorageServiceProvider);
+    _enabled =
+        storage.getSetting<bool>(StorageKeys.agentLocalInterrogateEnabled) ??
+        false;
+    _scanLocalModels();
+  }
+
+  Future<void> _scanLocalModels() async {
+    final models = await ref
+        .read(localOnnxModelServiceProvider)
+        .scanTaggerModels();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _hasLocalModels = models.isNotEmpty);
+  }
+
+  Future<void> _toggle(bool value) async {
+    setState(() => _enabled = value);
+    await ref
+        .read(localStorageServiceProvider)
+        .setSetting(StorageKeys.agentLocalInterrogateEnabled, value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_hasLocalModels) {
+      return const SizedBox.shrink();
+    }
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                context.l10n.promptAssistant_localInterrogateSwitch,
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                context.l10n.promptAssistant_localInterrogateSubtitle,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Switch(value: _enabled, onChanged: _toggle),
+      ],
+    );
   }
 }

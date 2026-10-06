@@ -3,14 +3,19 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/agent/agent_types.dart';
+import '../../../core/constants/storage_keys.dart';
+import '../../../core/storage/local_storage_service.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../data/models/agent/agent_settings.dart';
+import '../../../data/services/local_onnx_model_service.dart';
+import '../../../data/services/local_onnx_tagger_service.dart';
 import '../../agent_settings/providers/agent_settings_provider.dart';
 import '../../prompt_assistant/models/prompt_assistant_models.dart';
 import '../../prompt_assistant/providers/prompt_assistant_config_provider.dart';
 import '../../prompt_assistant/services/prompt_assistant_api_client.dart';
 import '../../prompt_assistant/services/provider_adapters/prompt_assistant_adapter.dart';
 import '../../prompt_assistant/services/prompt_assistant_service.dart';
+import '../../providers/reverse_prompt_provider.dart';
 import 'generation_tool_results.dart';
 import 'generation_workspace_path_resolver.dart';
 import 'agent_resource_resolver.dart';
@@ -82,6 +87,31 @@ class GenerationInterrogationService {
     Uint8List bytes,
     AbortSignal? signal,
   ) async {
+    // 本地反推开关开启时图片绝不发送远端；本地失败也不回退远端路由。
+    if (_localInterrogateEnabled) {
+      try {
+        throwIfAborted(signal);
+        final prompt = await _runLocalInterrogation(bytes);
+        throwIfAborted(signal);
+        if (prompt.isEmpty) {
+          return generationErrorResult(
+            'Local interrogation returned no tags. Adjust the tagger model or '
+            'thresholds in the reverse prompt panel.',
+          );
+        }
+        return generationTextResult(prompt);
+      } catch (e) {
+        if (signal?.aborted == true) {
+          return generationErrorResult('Interrogation cancelled.');
+        }
+        AppLogger.w('local interrogation failed: $e', 'AgentChat');
+        return generationErrorResult(
+          'Local interrogation failed and the image was not sent anywhere. '
+          'Check the local tagger model configuration.',
+        );
+      }
+    }
+
     // 路由优先级：支持图片输入的对话模型直读 > 专用 reverse 模型（fallback）。
     final config = _ref.read(promptAssistantConfigProvider);
     final agentSettings = _ref.read(agentSettingsProvider).settings;
@@ -165,6 +195,45 @@ class GenerationInterrogationService {
       }
       return generationErrorResult('Interrogation failed.');
     }
+  }
+
+  bool get _localInterrogateEnabled =>
+      _ref
+          .read(localStorageServiceProvider)
+          .getSetting<bool>(StorageKeys.agentLocalInterrogateEnabled) ??
+      false;
+
+  /// Runs the on-device ONNX tagger and returns only tag text. The model and
+  /// thresholds follow the reverse prompt panel selection so both entry points
+  /// stay consistent.
+  Future<String> _runLocalInterrogation(Uint8List bytes) async {
+    final models = await _ref
+        .read(localOnnxModelServiceProvider)
+        .scanTaggerModels();
+    if (models.isEmpty) {
+      throw StateError('No local tagger model is configured.');
+    }
+    final panelState = _ref.read(reversePromptProvider);
+    LocalOnnxModelDescriptor? model;
+    final selectedPath = panelState.selectedTaggerModelPath;
+    if (selectedPath != null) {
+      for (final candidate in models) {
+        if (candidate.path == selectedPath) {
+          model = candidate;
+          break;
+        }
+      }
+    }
+    model ??= models.first;
+    final result = await _ref
+        .read(localOnnxTaggerServiceProvider)
+        .tagImage(
+          imageBytes: bytes,
+          model: model,
+          generalThreshold: panelState.taggerGeneralThreshold,
+          characterThreshold: panelState.taggerCharacterThreshold,
+        );
+    return result.prompt;
   }
 
   Future<Uint8List> _loadImage(Map<String, dynamic> args) async {
