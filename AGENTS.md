@@ -191,7 +191,7 @@ CI 与 Release checkout 不直接消耗 GitHub LFS 流量；`scripts/prepare_bun
 
 ## README 多语言同步规范
 
-`README.md`（简体中文）、`README.zh-TW.md`（繁體中文）与 `README.en-US.md`（English）只保留标题、分支来源、自用维护说明与分镜编辑器演示图（`docs/assets/storyboard-demo.jpg`、`docs/assets/storyboard-demo-irregular.jpg`），不放其他产品简介、功能清单、界面截图、平台、下载安装、隐私或致谢；构建命令、项目结构和开发约定写在 `AGENTS.md`，版本发布流程写在项目级 `aaalice-launcher-release` skill。
+`README.md`（简体中文）、`README.zh-TW.md`（繁體中文）与 `README.en-US.md`（English）只保留标题、分支来源、自用维护说明、更新记录表与分镜编辑器演示图（`docs/assets/storyboard-demo.jpg`、`docs/assets/storyboard-demo-irregular.jpg`），不放其他产品简介、功能清单、界面截图、平台、下载安装、隐私或致谢；构建命令、项目结构和开发约定写在 `AGENTS.md`，版本发布流程写在项目级 `aaalice-launcher-release` skill。发布新版本时在更新记录表顶部追加一行三语同步的版本摘要。
 
 三份 README 内容必须保持同步，顶部保留语言切换链接；繁中版与英文版只翻译简中版事实，不自行增删内容。
 
