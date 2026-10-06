@@ -24,7 +24,15 @@ final localOnnxTaggerServiceProvider = Provider<LocalOnnxTaggerService>((ref) {
   return const LocalOnnxTaggerService();
 });
 
-enum OnnxTaggerLabelCategory { rating, general, character, other }
+enum OnnxTaggerLabelCategory {
+  rating,
+  general,
+  character,
+  copyright,
+  style,
+  meta,
+  other,
+}
 
 class OnnxTaggerLabel {
   const OnnxTaggerLabel({required this.name, this.category});
@@ -49,6 +57,15 @@ class OnnxTaggerLabel {
         normalizedCategory == 'character' ||
         normalizedCategory == 'characters') {
       return OnnxTaggerLabelCategory.character;
+    }
+    if (normalizedCategory == 'copyright' || normalizedCategory == 'copyrights') {
+      return OnnxTaggerLabelCategory.copyright;
+    }
+    if (normalizedCategory == 'style' || normalizedCategory == 'styles') {
+      return OnnxTaggerLabelCategory.style;
+    }
+    if (normalizedCategory == 'meta') {
+      return OnnxTaggerLabelCategory.meta;
     }
     return OnnxTaggerLabelCategory.other;
   }
@@ -104,6 +121,22 @@ class LocalOnnxTaggerService {
     return _resolveSessionLoadMode(model);
   }
 
+  static List<OnnxTaggerTag> debugBuildTagsForTesting({
+    required List<OnnxTaggerLabel> labels,
+    required List<double> scores,
+    double generalThreshold = 0.35,
+    double characterThreshold = 0.35,
+    bool includeRatings = false,
+  }) {
+    return const LocalOnnxTaggerService()._buildTags(
+      labels: labels,
+      scores: scores,
+      generalThreshold: generalThreshold,
+      characterThreshold: characterThreshold,
+      includeRatings: includeRatings,
+    );
+  }
+
   Future<OnnxTaggerResult> tagImage({
     required Uint8List imageBytes,
     required LocalOnnxModelDescriptor model,
@@ -149,9 +182,10 @@ class LocalOnnxTaggerService {
     }
 
     final input = LocalOnnxTaggerPreprocessor.preprocess(decoded, model);
+    final intraOpThreads = _resolveIntraOpThreads(model);
     final options = OrtSessionOptions()
       ..setInterOpNumThreads(1)
-      ..setIntraOpNumThreads(1)
+      ..setIntraOpNumThreads(intraOpThreads)
       ..setSessionGraphOptimizationLevel(GraphOptimizationLevel.ortEnableAll);
     final runOptions = OrtRunOptions();
     final inputOrt = OrtValueTensor.createTensorWithDataList(
@@ -213,28 +247,46 @@ class LocalOnnxTaggerService {
     OrtSessionOptions options,
   ) async {
     final loadMode = _resolveSessionLoadMode(model);
-    if (loadMode == OnnxSessionLoadMode.externalDataFile) {
-      return _createFileSession(model.path, options);
-    }
-
-    final patchedPath = await _ensurePatchedSingleFileModelPath(model.path);
-    return _createFileSession(patchedPath, options);
+    final modelPath = loadMode == OnnxSessionLoadMode.externalDataFile
+        ? model.path
+        : await _ensurePatchedSingleFileModelPath(model.path);
+    return _createFileSession(
+      modelPath,
+      options,
+      intraOpThreads: _resolveIntraOpThreads(model),
+    );
   }
 
-  OrtSession _createFileSession(String modelPath, OrtSessionOptions options) {
+  OrtSession _createFileSession(
+    String modelPath,
+    OrtSessionOptions options, {
+    required int intraOpThreads,
+  }) {
     if (Platform.isWindows) {
-      return _createWindowsFileSession(modelPath);
+      return _createWindowsFileSession(modelPath, intraOpThreads);
     }
     return OrtSession.fromFile(File(modelPath), options);
   }
 
-  OrtSession _createWindowsFileSession(String modelPath) {
-    final options = _createNativeSessionOptions();
+  /// PixAI tagger（SAM3 骨干，1008² 输入）远重于 448² 系 tagger，
+  /// 单线程推理需要分钟级；其余模型保持原单线程行为。
+  static int _resolveIntraOpThreads(LocalOnnxModelDescriptor model) {
+    if (model.kind == LocalOnnxModelKind.pixaiTagger) {
+      return Platform.numberOfProcessors.clamp(1, 8);
+    }
+    return 1;
+  }
+
+  OrtSession _createWindowsFileSession(String modelPath, int intraOpThreads) {
+    final nativeOptions = _createNativeSessionOptions();
     try {
-      _configureNativeSessionOptions(options);
-      return _createWindowsSessionFromPath(modelPath, options);
+      _configureNativeSessionOptions(
+        nativeOptions,
+        intraOpThreads: intraOpThreads,
+      );
+      return _createWindowsSessionFromPath(modelPath, nativeOptions);
     } finally {
-      _releaseNativeSessionOptions(options);
+      _releaseNativeSessionOptions(nativeOptions);
     }
   }
 
@@ -255,8 +307,9 @@ class LocalOnnxTaggerService {
   }
 
   void _configureNativeSessionOptions(
-    ffi.Pointer<bg.OrtSessionOptions> options,
-  ) {
+    ffi.Pointer<bg.OrtSessionOptions> options, {
+    required int intraOpThreads,
+  }) {
     var statusPtr = OrtEnv.instance.ortApiPtr.ref.SetInterOpNumThreads
         .asFunction<
           bg.OrtStatusPtr Function(ffi.Pointer<bg.OrtSessionOptions>, int)
@@ -266,7 +319,7 @@ class LocalOnnxTaggerService {
     statusPtr = OrtEnv.instance.ortApiPtr.ref.SetIntraOpNumThreads
         .asFunction<
           bg.OrtStatusPtr Function(ffi.Pointer<bg.OrtSessionOptions>, int)
-        >()(options, 1);
+        >()(options, intraOpThreads);
     OrtStatus.checkOrtStatus(statusPtr);
 
     statusPtr = OrtEnv.instance.ortApiPtr.ref.SetSessionGraphOptimizationLevel
@@ -512,20 +565,27 @@ class LocalOnnxTaggerService {
     for (var i = 0; i < count; i++) {
       final label = labels[i];
       final category = label.labelCategory;
-      if (category == OnnxTaggerLabelCategory.rating && !includeRatings) {
-        continue;
-      }
-      if (category != OnnxTaggerLabelCategory.general &&
-          category != OnnxTaggerLabelCategory.character &&
-          !(includeRatings && category == OnnxTaggerLabelCategory.rating)) {
-        continue;
-      }
+      final included = switch (category) {
+        OnnxTaggerLabelCategory.general ||
+        OnnxTaggerLabelCategory.character ||
+        OnnxTaggerLabelCategory.copyright ||
+        OnnxTaggerLabelCategory.style => true,
+        OnnxTaggerLabelCategory.rating => includeRatings,
+        // Meta（highres/scan/spoilers 等）与 WD14 的 other 一样属于噪声类别。
+        OnnxTaggerLabelCategory.meta ||
+        OnnxTaggerLabelCategory.other => false,
+      };
+      if (!included) continue;
 
       final score = scores[i];
       final effectiveThreshold = switch (category) {
         OnnxTaggerLabelCategory.character => characterThreshold,
-        OnnxTaggerLabelCategory.rating => generalThreshold,
-        OnnxTaggerLabelCategory.general => generalThreshold,
+        // PixAI 官方按类别阈值（macro-F1 最优）：copyright 0.24、style 0.15。
+        OnnxTaggerLabelCategory.copyright => 0.24,
+        OnnxTaggerLabelCategory.style => 0.15,
+        OnnxTaggerLabelCategory.rating ||
+        OnnxTaggerLabelCategory.general ||
+        OnnxTaggerLabelCategory.meta ||
         OnnxTaggerLabelCategory.other => generalThreshold,
       };
       if (score < effectiveThreshold) continue;
@@ -633,6 +693,11 @@ class LocalOnnxTaggerService {
           .toList();
     }
     if (decoded is Map<String, dynamic>) {
+      final pixaiLabels = _parsePixaiCategoryLabels(decoded);
+      if (pixaiLabels.isNotEmpty) {
+        return pixaiLabels;
+      }
+
       final vocabularyLabels = _parseVocabularyLabels(decoded);
       if (vocabularyLabels.isNotEmpty) {
         return vocabularyLabels;
@@ -676,6 +741,61 @@ class LocalOnnxTaggerService {
       }
     }
     return const [];
+  }
+
+  /// Parses the PixAI tagger `tags.json` layout: each category declares a
+  /// global `offset`, a `count`, and its ordered `tags`; the output logit at
+  /// `offset + i` corresponds to `tags[i]`. Returns an empty list when the
+  /// document does not strictly match this layout so other parsers stay in
+  /// charge.
+  List<OnnxTaggerLabel> _parsePixaiCategoryLabels(Map<String, dynamic> decoded) {
+    final categories = decoded['categories'];
+    if (categories is! List || categories.isEmpty) {
+      return const [];
+    }
+
+    final labelsByIndex = <int, OnnxTaggerLabel>{};
+    var declaredCount = 0;
+    for (final rawEntry in categories) {
+      if (rawEntry is! Map) {
+        return const [];
+      }
+      final name = rawEntry['name']?.toString().trim();
+      final offset = rawEntry['offset'] is num
+          ? (rawEntry['offset'] as num).toInt()
+          : null;
+      final count = rawEntry['count'] is num
+          ? (rawEntry['count'] as num).toInt()
+          : null;
+      final tags = rawEntry['tags'];
+      if (name == null ||
+          name.isEmpty ||
+          offset == null ||
+          count == null ||
+          tags is! List ||
+          tags.length != count) {
+        return const [];
+      }
+      for (var i = 0; i < tags.length; i++) {
+        final tag = tags[i]?.toString().trim();
+        if (tag == null || tag.isEmpty) {
+          return const [];
+        }
+        labelsByIndex[offset + i] = OnnxTaggerLabel(name: tag, category: name);
+      }
+      declaredCount += count;
+    }
+
+    if (labelsByIndex.length != declaredCount) {
+      return const [];
+    }
+    final numClasses = decoded['num_classes'];
+    if (numClasses is num && numClasses.toInt() != declaredCount) {
+      return const [];
+    }
+
+    final maxIndex = labelsByIndex.keys.reduce(math.max);
+    return List.generate(maxIndex + 1, (index) => labelsByIndex[index]!);
   }
 
   List<OnnxTaggerLabel> _parseVocabularyLabels(Map<String, dynamic> decoded) {

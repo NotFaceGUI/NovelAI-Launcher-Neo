@@ -6470,6 +6470,25 @@ class AppLocalizationsZh extends AppLocalizations {
       '只输出 General / Character 分类标签；Rating、Artist、Copyright、Meta 等分类会被过滤。';
 
   @override
+  String get reversePrompt_taggerFilterHintPixai =>
+      '输出 General / Character / Copyright / Style 分类标签；Meta 与 Rating 会被过滤。';
+
+  @override
+  String get reversePrompt_pixaiDownloadAction => '下载 PixAI Tagger v1.0';
+
+  @override
+  String get reversePrompt_pixaiDownloadHint =>
+      '共约 1.96 GB，保存到应用的 tagger 模型目录；下载中断后可自动续传。';
+
+  @override
+  String reversePrompt_pixaiDownloading(String progress) {
+    return '正在下载 PixAI Tagger（$progress）';
+  }
+
+  @override
+  String get reversePrompt_pixaiDownloadFailed => 'PixAI tagger 下载失败';
+
+  @override
   String get reversePrompt_replacementEmptyHint =>
       '替换目标角色为空。这里从词库选择一个角色作为替换目标，不会注入到正向提示词。';
 
@@ -6726,6 +6745,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get promptAssistant_taskRoutingSubtitle => '优化、翻译、反推、角色替换可绑定不同服务商和模型';
+
+  @override
+  String get promptAssistant_localInterrogateSwitch => 'Agent 本地反推';
+
+  @override
+  String get promptAssistant_localInterrogateSubtitle =>
+      'Agent 的反推工具改用本地 ONNX tagger 在设备上处理图片，图片不会上传到任何远端服务，反推出的提示词作为工具结果并入对话。模型与阈值沿用生图页反推面板的配置。';
 
   @override
   String promptAssistant_taskRouteTitle(Object title) {
@@ -9775,6 +9801,30 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settings_localOnnxTaggerFolder => '本地 ONNX tagger 模型';
+
+  @override
+  String get settings_pixaiTaggerDownloadSource => 'PixAI tagger 下载源';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceSubtitle => 'HTTPS 基础地址；留空使用官方源';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceDialogTitle =>
+      'PixAI tagger 下载源';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceDialogHint =>
+      'https://…/pixai-tagger-v1.0-onnx/resolve/main';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceInvalid => '下载源必须是 HTTPS 地址';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceSaved => 'PixAI tagger 下载源已保存';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceReset =>
+      'PixAI tagger 下载源已恢复为官方源';
 
   @override
   String get settings_notConfigured => '未配置';
@@ -21883,6 +21933,25 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
       '只輸出 General / Character 分類標籤；Rating、Artist、Copyright、Meta 等分類會被過濾。';
 
   @override
+  String get reversePrompt_taggerFilterHintPixai =>
+      '輸出 General / Character / Copyright / Style 分類標籤；Meta 與 Rating 會被過濾。';
+
+  @override
+  String get reversePrompt_pixaiDownloadAction => '下載 PixAI Tagger v1.0';
+
+  @override
+  String get reversePrompt_pixaiDownloadHint =>
+      '共約 1.96 GB，儲存到應用的 tagger 模型目錄；下載中斷後可自動續傳。';
+
+  @override
+  String reversePrompt_pixaiDownloading(String progress) {
+    return '正在下載 PixAI Tagger（$progress）';
+  }
+
+  @override
+  String get reversePrompt_pixaiDownloadFailed => 'PixAI tagger 下載失敗';
+
+  @override
   String get reversePrompt_replacementEmptyHint =>
       '替換目標角色為空。這裡從詞庫選擇一個角色作為替換目標，不會注入到正向提示詞。';
 
@@ -22139,6 +22208,13 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get promptAssistant_taskRoutingSubtitle => '最佳化、翻譯、反推、角色替換可繫結不同服務商和模型';
+
+  @override
+  String get promptAssistant_localInterrogateSwitch => 'Agent 本地反推';
+
+  @override
+  String get promptAssistant_localInterrogateSubtitle =>
+      'Agent 的反推工具改用本地 ONNX tagger 在裝置上處理圖片，圖片不會上傳到任何遠端服務，反推出的提示詞作為工具結果併入對話。模型與閾值沿用生圖頁反推面板的配置。';
 
   @override
   String promptAssistant_taskRouteTitle(Object title) {
@@ -25188,6 +25264,30 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get settings_localOnnxTaggerFolder => '本地 ONNX tagger 模型';
+
+  @override
+  String get settings_pixaiTaggerDownloadSource => 'PixAI tagger 下載源';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceSubtitle => 'HTTPS 基礎位址；留空使用官方源';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceDialogTitle =>
+      'PixAI tagger 下載源';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceDialogHint =>
+      'https://…/pixai-tagger-v1.0-onnx/resolve/main';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceInvalid => '下載源必須是 HTTPS 位址';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceSaved => 'PixAI tagger 下載源已儲存';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceReset =>
+      'PixAI tagger 下載源已恢復為官方源';
 
   @override
   String get settings_notConfigured => '未配置';

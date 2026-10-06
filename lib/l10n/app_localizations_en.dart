@@ -6745,6 +6745,26 @@ class AppLocalizationsEn extends AppLocalizations {
       'Only General / Character tags are output. Rating, Artist, Copyright, Meta, and other categories are filtered.';
 
   @override
+  String get reversePrompt_taggerFilterHintPixai =>
+      'General / Character / Copyright / Style tags are output. Meta and Rating are filtered.';
+
+  @override
+  String get reversePrompt_pixaiDownloadAction => 'Download PixAI Tagger v1.0';
+
+  @override
+  String get reversePrompt_pixaiDownloadHint =>
+      'About 1.96 GB in total, saved to the app\'s tagger model folder. Interrupted downloads resume automatically.';
+
+  @override
+  String reversePrompt_pixaiDownloading(String progress) {
+    return 'Downloading PixAI Tagger ($progress)';
+  }
+
+  @override
+  String get reversePrompt_pixaiDownloadFailed =>
+      'PixAI tagger download failed';
+
+  @override
   String get reversePrompt_replacementEmptyHint =>
       'No replacement target character selected. Choose a character from the tag library here; it will not be injected into the prompt.';
 
@@ -7017,6 +7037,14 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get promptAssistant_taskRoutingSubtitle =>
       'Bind optimize, translate, reverse prompt, and character replacement to different providers and models';
+
+  @override
+  String get promptAssistant_localInterrogateSwitch =>
+      'Agent local interrogation';
+
+  @override
+  String get promptAssistant_localInterrogateSubtitle =>
+      'The Agent\'s interrogate tool runs the local ONNX tagger on the image; the image is never uploaded and the resulting prompt is returned as the tool result. Uses the model and thresholds from the reverse prompt panel.';
 
   @override
   String promptAssistant_taskRouteTitle(Object title) {
@@ -10184,6 +10212,34 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settings_localOnnxTaggerFolder => 'Local ONNX tagger model';
+
+  @override
+  String get settings_pixaiTaggerDownloadSource =>
+      'PixAI tagger download source';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceSubtitle =>
+      'HTTPS base URL; leave empty to use the official source';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceDialogTitle =>
+      'PixAI tagger download source';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceDialogHint =>
+      'https://…/pixai-tagger-v1.0-onnx/resolve/main';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceInvalid =>
+      'The download source must be an HTTPS URL';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceSaved =>
+      'PixAI tagger download source saved';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceReset =>
+      'PixAI tagger download source reset to the official source';
 
   @override
   String get settings_notConfigured => 'Not configured';

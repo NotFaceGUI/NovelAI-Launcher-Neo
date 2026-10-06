@@ -11974,6 +11974,36 @@ abstract class AppLocalizations {
   /// **'Only General / Character tags are output. Rating, Artist, Copyright, Meta, and other categories are filtered.'**
   String get reversePrompt_taggerFilterHint;
 
+  /// No description provided for @reversePrompt_taggerFilterHintPixai.
+  ///
+  /// In en, this message translates to:
+  /// **'General / Character / Copyright / Style tags are output. Meta and Rating are filtered.'**
+  String get reversePrompt_taggerFilterHintPixai;
+
+  /// No description provided for @reversePrompt_pixaiDownloadAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Download PixAI Tagger v1.0'**
+  String get reversePrompt_pixaiDownloadAction;
+
+  /// No description provided for @reversePrompt_pixaiDownloadHint.
+  ///
+  /// In en, this message translates to:
+  /// **'About 1.96 GB in total, saved to the app\'s tagger model folder. Interrupted downloads resume automatically.'**
+  String get reversePrompt_pixaiDownloadHint;
+
+  /// No description provided for @reversePrompt_pixaiDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading PixAI Tagger ({progress})'**
+  String reversePrompt_pixaiDownloading(String progress);
+
+  /// No description provided for @reversePrompt_pixaiDownloadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'PixAI tagger download failed'**
+  String get reversePrompt_pixaiDownloadFailed;
+
   /// No description provided for @reversePrompt_replacementEmptyHint.
   ///
   /// In en, this message translates to:
@@ -12459,6 +12489,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Bind optimize, translate, reverse prompt, and character replacement to different providers and models'**
   String get promptAssistant_taskRoutingSubtitle;
+
+  /// No description provided for @promptAssistant_localInterrogateSwitch.
+  ///
+  /// In en, this message translates to:
+  /// **'Agent local interrogation'**
+  String get promptAssistant_localInterrogateSwitch;
+
+  /// No description provided for @promptAssistant_localInterrogateSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'The Agent\'s interrogate tool runs the local ONNX tagger on the image; the image is never uploaded and the resulting prompt is returned as the tool result. Uses the model and thresholds from the reverse prompt panel.'**
+  String get promptAssistant_localInterrogateSubtitle;
 
   /// No description provided for @promptAssistant_taskRouteTitle.
   ///
@@ -17876,6 +17918,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Local ONNX tagger model'**
   String get settings_localOnnxTaggerFolder;
+
+  /// No description provided for @settings_pixaiTaggerDownloadSource.
+  ///
+  /// In en, this message translates to:
+  /// **'PixAI tagger download source'**
+  String get settings_pixaiTaggerDownloadSource;
+
+  /// No description provided for @settings_pixaiTaggerDownloadSourceSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'HTTPS base URL; leave empty to use the official source'**
+  String get settings_pixaiTaggerDownloadSourceSubtitle;
+
+  /// No description provided for @settings_pixaiTaggerDownloadSourceDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'PixAI tagger download source'**
+  String get settings_pixaiTaggerDownloadSourceDialogTitle;
+
+  /// No description provided for @settings_pixaiTaggerDownloadSourceDialogHint.
+  ///
+  /// In en, this message translates to:
+  /// **'https://…/pixai-tagger-v1.0-onnx/resolve/main'**
+  String get settings_pixaiTaggerDownloadSourceDialogHint;
+
+  /// No description provided for @settings_pixaiTaggerDownloadSourceInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The download source must be an HTTPS URL'**
+  String get settings_pixaiTaggerDownloadSourceInvalid;
+
+  /// No description provided for @settings_pixaiTaggerDownloadSourceSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'PixAI tagger download source saved'**
+  String get settings_pixaiTaggerDownloadSourceSaved;
+
+  /// No description provided for @settings_pixaiTaggerDownloadSourceReset.
+  ///
+  /// In en, this message translates to:
+  /// **'PixAI tagger download source reset to the official source'**
+  String get settings_pixaiTaggerDownloadSourceReset;
 
   /// No description provided for @settings_notConfigured.
   ///

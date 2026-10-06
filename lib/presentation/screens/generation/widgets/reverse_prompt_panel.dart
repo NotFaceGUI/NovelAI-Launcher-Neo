@@ -12,6 +12,7 @@ import '../../../../data/models/character/character_prompt.dart';
 import '../../../../data/services/local_onnx_model_service.dart';
 import '../../../providers/generation/generation_panel_expansion_provider.dart';
 import '../../../providers/generation/generation_params_notifier.dart';
+import '../../../providers/pixai_tagger_download_provider.dart';
 import '../../../providers/reverse_prompt_provider.dart';
 import '../../../providers/tag_library_page_provider.dart';
 import '../../../prompt_assistant/providers/prompt_assistant_history_provider.dart';
@@ -285,6 +286,7 @@ class _ReversePromptPanelState extends ConsumerState<ReversePromptPanel> {
   }
 
   Widget _buildTaggerControls(ReversePromptState state) {
+    final download = ref.watch(pixaiTaggerDownloadProvider);
     return FutureBuilder<List<LocalOnnxModelDescriptor>>(
       future: ref.read(localOnnxModelServiceProvider).scanTaggerModels(),
       builder: (context, snapshot) {
@@ -293,6 +295,13 @@ class _ReversePromptPanelState extends ConsumerState<ReversePromptPanel> {
             models.any((m) => m.path == state.selectedTaggerModelPath)
             ? state.selectedTaggerModelPath
             : null;
+        final selectedModel = models
+            .where((m) => m.path == selected)
+            .firstOrNull;
+        final hasPixaiModel = models.any(
+          (m) => m.kind == LocalOnnxModelKind.pixaiTagger,
+        );
+        final theme = Theme.of(context);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -318,6 +327,37 @@ class _ReversePromptPanelState extends ConsumerState<ReversePromptPanel> {
                 isDense: true,
               ),
             ),
+            if (download.status == PixaiTaggerDownloadStatus.running) ...[
+              const SizedBox(height: 8),
+              _PixaiDownloadProgress(state: download),
+            ] else if (!hasPixaiModel) ...[
+              const SizedBox(height: 8),
+              if (download.status == PixaiTaggerDownloadStatus.failed) ...[
+                Text(
+                  context.l10n.reversePrompt_pixaiDownloadFailed,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+                const SizedBox(height: 4),
+              ],
+              OutlinedButton.icon(
+                onPressed: state.isProcessing
+                    ? null
+                    : () => unawaited(
+                        ref.read(pixaiTaggerDownloadProvider.notifier).start(),
+                      ),
+                icon: const Icon(Icons.download_outlined, size: 18),
+                label: Text(context.l10n.reversePrompt_pixaiDownloadAction),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                context.l10n.reversePrompt_pixaiDownloadHint,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
             const SizedBox(height: 6),
             _ThresholdSlider(
               label: context.l10n.reversePrompt_generalThreshold,
@@ -338,9 +378,11 @@ class _ReversePromptPanelState extends ConsumerState<ReversePromptPanel> {
                         .setTaggerCharacterThreshold,
             ),
             Text(
-              context.l10n.reversePrompt_taggerFilterHint,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              selectedModel?.kind == LocalOnnxModelKind.pixaiTagger
+                  ? context.l10n.reversePrompt_taggerFilterHintPixai
+                  : context.l10n.reversePrompt_taggerFilterHint,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -602,6 +644,46 @@ class _ReversePromptPanelState extends ConsumerState<ReversePromptPanel> {
       'reversePrompt_noOnnxModel' => context.l10n.reversePrompt_noOnnxModel,
       _ => error,
     };
+  }
+}
+
+class _PixaiDownloadProgress extends ConsumerWidget {
+  const _PixaiDownloadProgress({required this.state});
+
+  final PixaiTaggerDownloadState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final percent = '${(state.progress * 100).toStringAsFixed(0)}%';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                context.l10n.reversePrompt_pixaiDownloading(percent),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.close, size: 18),
+              tooltip: context.l10n.common_cancel,
+              onPressed: () =>
+                  ref.read(pixaiTaggerDownloadProvider.notifier).cancel(),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        LinearProgressIndicator(value: state.progress, minHeight: 3),
+      ],
+    );
   }
 }
 

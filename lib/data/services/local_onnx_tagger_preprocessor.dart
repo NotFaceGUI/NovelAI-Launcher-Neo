@@ -5,7 +5,7 @@ import 'package:image/image.dart' as img;
 
 import 'local_onnx_model_service.dart';
 
-enum OnnxTaggerPreprocessing { wd14, clTagger, clTaggerV2, animeTimm }
+enum OnnxTaggerPreprocessing { wd14, clTagger, clTaggerV2, animeTimm, pixai }
 
 enum OnnxTaggerOutputActivation { auto, sigmoid }
 
@@ -86,6 +86,11 @@ class LocalOnnxTaggerPreprocessor {
         inputSize: 448,
         outputActivation: OnnxTaggerOutputActivation.sigmoid,
       ),
+      LocalOnnxModelKind.pixaiTagger => const OnnxTaggerPreprocessProfile(
+        preprocessing: OnnxTaggerPreprocessing.pixai,
+        inputSize: 1008,
+        outputActivation: OnnxTaggerOutputActivation.sigmoid,
+      ),
       LocalOnnxModelKind.wd14Tagger ||
       LocalOnnxModelKind.unknown => OnnxTaggerPreprocessProfile(
         preprocessing: OnnxTaggerPreprocessing.wd14,
@@ -102,6 +107,9 @@ class LocalOnnxTaggerPreprocessor {
     final profile = profileFor(model);
     if (profile.preprocessing == OnnxTaggerPreprocessing.animeTimm) {
       return _preprocessAnimeTimm(source, profile.inputSize);
+    }
+    if (profile.preprocessing == OnnxTaggerPreprocessing.pixai) {
+      return _preprocessPixai(source, profile.inputSize);
     }
 
     final resized = _letterbox(
@@ -121,8 +129,9 @@ class LocalOnnxTaggerPreprocessor {
         normalize: (value, _) => value / 255.0,
       ),
       OnnxTaggerPreprocessing.wd14 => _nhwcBgrInput(resized),
+      OnnxTaggerPreprocessing.pixai ||
       OnnxTaggerPreprocessing.animeTimm => throw StateError(
-        'AnimeTimm preprocessing must use its official resize pipeline',
+        'PixAI and AnimeTimm preprocessing must use their official pipelines',
       ),
     };
   }
@@ -146,6 +155,45 @@ class LocalOnnxTaggerPreprocessor {
       channelOrder: const [0, 1, 2],
       normalize: (value, channel) =>
           (value / 255.0 - _animeTimmMean[channel]) / _animeTimmStd[channel],
+    );
+  }
+
+  static OnnxImageInput _preprocessPixai(img.Image source, int inputSize) {
+    // Official PixAI pipeline: flatten alpha onto a white background, resize
+    // with bilinear interpolation preserving the aspect ratio, paste centered
+    // onto a black canvas, then scale to [-1, 1] after padding.
+    final flattened = img.Image(
+      width: source.width,
+      height: source.height,
+    );
+    img.fill(flattened, color: img.ColorRgb8(255, 255, 255));
+    img.compositeImage(flattened, source);
+    final layout = computeLetterboxLayout(
+      sourceWidth: source.width,
+      sourceHeight: source.height,
+      inputSize: inputSize,
+    );
+    final resizedSource = img.copyResize(
+      flattened,
+      width: layout.resizedWidth,
+      height: layout.resizedHeight,
+      interpolation: img.Interpolation.linear,
+    );
+    final canvas = img.Image(
+      width: layout.canvasWidth,
+      height: layout.canvasHeight,
+    );
+    img.fill(canvas, color: img.ColorRgb8(0, 0, 0));
+    img.compositeImage(
+      canvas,
+      resizedSource,
+      dstX: layout.offsetX,
+      dstY: layout.offsetY,
+    );
+    return _nchwInput(
+      canvas,
+      channelOrder: const [0, 1, 2],
+      normalize: (value, _) => value / 255.0 * 2.0 - 1.0,
     );
   }
 

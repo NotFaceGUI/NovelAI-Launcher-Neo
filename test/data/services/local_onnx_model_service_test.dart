@@ -211,6 +211,104 @@ void main() {
   });
 
   test(
+    'discovers PixAI tagger inside a managed subdirectory via tags.json',
+    () async {
+      final managedDirectory = await Directory(
+        await service.getManagedTaggerDirectory(),
+      ).create(recursive: true);
+      final pixaiDirectory = await Directory(
+        p.join(managedDirectory.path, 'pixai-tagger-v1.0'),
+      ).create();
+      final model = await File(
+        p.join(pixaiDirectory.path, 'model.onnx'),
+      ).writeAsBytes([1, 2, 3]);
+      await File('${model.path}.data').writeAsBytes([4, 5]);
+      final tags = await File(
+        p.join(pixaiDirectory.path, 'tags.json'),
+      ).writeAsString(
+        '{"num_classes":1,"categories":[{"name":"general","offset":0,'
+        '"count":1,"tags":["1girl"]}]}',
+      );
+      // 一层子目录之外的旧模型也要继续可见。
+      await File(
+        p.join(managedDirectory.path, 'wd14.onnx'),
+      ).writeAsBytes([9]);
+      await File(
+        p.join(managedDirectory.path, 'selected_tags.csv'),
+      ).writeAsString('name,category\n1girl,0\n');
+      await service.setTaggerDirectory(managedDirectory.path);
+
+      final models = await service.scanTaggerModels();
+
+      expect(models, hasLength(2));
+      final pixai = models.singleWhere(
+        (candidate) => candidate.kind == LocalOnnxModelKind.pixaiTagger,
+      );
+      expect(pixai.path, model.path);
+      expect(pixai.labelsPath, tags.path);
+    },
+  );
+
+  test(
+    'scans the managed directory even when no model directory is configured',
+    () async {
+      // 一键下载只写入托管目录；从未配置/导入过的安装也必须能看到。
+      final managedDirectory = await Directory(
+        await service.getManagedTaggerDirectory(),
+      ).create(recursive: true);
+      final pixaiDirectory = await Directory(
+        p.join(managedDirectory.path, 'pixai-tagger-v1.0'),
+      ).create();
+      await File(
+        p.join(pixaiDirectory.path, 'model.onnx'),
+      ).writeAsBytes([1]);
+      await File(
+        p.join(pixaiDirectory.path, 'tags.json'),
+      ).writeAsString(
+        '{"num_classes":1,"categories":[{"name":"general","offset":0,'
+        '"count":1,"tags":["1girl"]}]}',
+      );
+
+      expect(service.taggerDirectory, isEmpty);
+      final models = await service.scanTaggerModels();
+
+      expect(models, hasLength(1));
+      expect(models.single.kind, LocalOnnxModelKind.pixaiTagger);
+    },
+  );
+
+  test('merges models from a custom directory and the managed directory',
+      () async {
+    final managedDirectory = await Directory(
+      await service.getManagedTaggerDirectory(),
+    ).create(recursive: true);
+    await File(
+      p.join(managedDirectory.path, 'model.onnx'),
+    ).writeAsBytes([1]);
+    await File(
+      p.join(managedDirectory.path, 'tags.json'),
+    ).writeAsString(
+      '{"num_classes":1,"categories":[{"name":"general","offset":0,'
+      '"count":1,"tags":["1girl"]}]}',
+    );
+    final customDirectory = await Directory(
+      p.join(tempDirectory.path, 'custom-models'),
+    ).create();
+    await File(p.join(customDirectory.path, 'wd14.onnx')).writeAsBytes([2]);
+    await File(
+      p.join(customDirectory.path, 'selected_tags.csv'),
+    ).writeAsString('name,category\n1girl,0\n');
+    await service.setTaggerDirectory(customDirectory.path);
+
+    final models = await service.scanTaggerModels();
+
+    expect(models.map((model) => model.kind), containsAll(<LocalOnnxModelKind>[
+      LocalOnnxModelKind.pixaiTagger,
+      LocalOnnxModelKind.wd14Tagger,
+    ]));
+  });
+
+  test(
     'rejects unsupported files selected by an unrestricted picker',
     () async {
       final unsupported = await File(

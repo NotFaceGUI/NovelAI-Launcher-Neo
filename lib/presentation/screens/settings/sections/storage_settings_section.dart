@@ -12,6 +12,7 @@ import '../../../../core/utils/hive_storage_helper.dart';
 import '../../../../core/utils/localization_extension.dart';
 import '../../../../core/utils/vibe_library_path_helper.dart';
 import '../../../../data/services/local_onnx_model_service.dart';
+import '../../../../data/services/pixai_tagger_download_service.dart';
 import '../../../providers/image_save_settings_provider.dart';
 import '../../../widgets/common/app_toast.dart';
 import '../../../widgets/common/themed_confirm_dialog.dart';
@@ -32,6 +33,71 @@ class StorageSettingsSection extends ConsumerStatefulWidget {
 
 class _StorageSettingsSectionState
     extends ConsumerState<StorageSettingsSection> {
+  String get _pixaiSourceDisplay {
+    final service = ref.read(pixaiTaggerDownloadServiceProvider);
+    final configured = service.configuredBaseUrl;
+    return configured.isEmpty
+        ? service.downloadBaseUrl
+        : configured;
+  }
+
+  Future<void> _editPixaiTaggerDownloadSource() async {
+    final service = ref.read(pixaiTaggerDownloadServiceProvider);
+    final controller = TextEditingController(text: service.configuredBaseUrl);
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          dialogContext.l10n.settings_pixaiTaggerDownloadSourceDialogTitle,
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText:
+                dialogContext.l10n.settings_pixaiTaggerDownloadSourceDialogHint,
+            helperText:
+                dialogContext.l10n.settings_pixaiTaggerDownloadSourceSubtitle,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(dialogContext.l10n.common_cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(dialogContext.l10n.common_confirm),
+          ),
+        ],
+      ),
+    );
+    if (saved != true || !mounted) {
+      return;
+    }
+    try {
+      await service.setDownloadBaseUrl(controller.text);
+    } on ArgumentError {
+      if (mounted) {
+        AppToast.error(
+          context,
+          context.l10n.settings_pixaiTaggerDownloadSourceInvalid,
+        );
+      }
+      return;
+    }
+    if (mounted) {
+      setState(() {});
+      final reset = controller.text.trim().isEmpty;
+      AppToast.success(
+        context,
+        reset
+            ? context.l10n.settings_pixaiTaggerDownloadSourceReset
+            : context.l10n.settings_pixaiTaggerDownloadSourceSaved,
+      );
+    }
+  }
+
   Future<void> _selectSaveDirectory(BuildContext context) async {
     try {
       final result = await FilePicker.platform.getDirectoryPath(
@@ -319,6 +385,18 @@ class _StorageSettingsSectionState
                   ],
                 ),
                 onTap: _configureLocalOnnxTagger,
+              ),
+              ListTile(
+                leading: const Icon(Icons.cloud_download_outlined),
+                title: Text(
+                  context.l10n.settings_pixaiTaggerDownloadSource,
+                ),
+                subtitle: Text(
+                  _pixaiSourceDisplay,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: _editPixaiTaggerDownloadSource,
               ),
               // Vibe库保存路径设置
               const VibeLibraryPathTile(),

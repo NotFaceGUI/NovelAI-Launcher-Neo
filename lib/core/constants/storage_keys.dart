@@ -409,6 +409,10 @@ class StorageKeys {
   static const String reversePromptCharacterConfigJson =
       'reverse_prompt_character_config_json';
   static const String onnxTaggerModelDirectory = 'onnx_tagger_model_directory';
+  static const String pixaiTaggerDownloadBaseUrl =
+      'pixai_tagger_download_base_url';
+  static const String agentLocalInterrogateEnabled =
+      'agent_local_interrogate_enabled';
 
   // 保护模式设置
   static const String protectionMode = 'protection_mode';

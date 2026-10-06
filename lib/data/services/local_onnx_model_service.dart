@@ -15,6 +15,7 @@ enum LocalOnnxModelKind {
   clTagger,
   clTaggerV2,
   animeTimmEva02,
+  pixaiTagger,
   unknown,
 }
 
@@ -473,16 +474,32 @@ class LocalOnnxModelService {
     if (await managedDirectory.exists()) {
       await _recoverInterruptedImports(managedDirectory);
     }
-    return _scanModels(
-      taggerDirectory,
-      allowedKinds: const {
-        LocalOnnxModelKind.wd14Tagger,
-        LocalOnnxModelKind.clTagger,
-        LocalOnnxModelKind.clTaggerV2,
-        LocalOnnxModelKind.animeTimmEva02,
-        LocalOnnxModelKind.unknown,
-      },
-    );
+    // 配置目录与托管目录合并扫描：一键下载的预设模型始终在托管目录，
+    // 不能因用户未配置/自定义了其他目录而不可见。
+    final configured = taggerDirectory.trim();
+    final byPath = <String, LocalOnnxModelDescriptor>{};
+    for (final directoryPath in {
+      if (configured.isNotEmpty) configured,
+      managedDirectory.path,
+    }) {
+      final models = await _scanModels(
+        directoryPath,
+        allowedKinds: const {
+          LocalOnnxModelKind.wd14Tagger,
+          LocalOnnxModelKind.clTagger,
+          LocalOnnxModelKind.clTaggerV2,
+          LocalOnnxModelKind.animeTimmEva02,
+          LocalOnnxModelKind.pixaiTagger,
+          LocalOnnxModelKind.unknown,
+        },
+      );
+      for (final model in models) {
+        byPath[model.path] = model;
+      }
+    }
+    final result = byPath.values.toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+    return result;
   }
 
   Future<List<LocalOnnxModelDescriptor>> _scanModels(
@@ -500,18 +517,37 @@ class LocalOnnxModelService {
     }
 
     final result = <LocalOnnxModelDescriptor>[];
-    await for (final entity in directory.list(followLinks: false)) {
-      if (entity is! File) continue;
-      if (p.extension(entity.path).toLowerCase() != '.onnx') continue;
+    final onnxFiles = <String>[
+      ...directory
+          .listSync(followLinks: false)
+          .whereType<File>()
+          .map((file) => file.path),
+      // 一层子目录（如下载预设的独立目录），不递归避免大目录扫描拖慢面板。
+      ...directory
+          .listSync(followLinks: false)
+          .whereType<Directory>()
+          .where(
+            (subdirectory) =>
+                !p.basename(subdirectory.path).startsWith('.import-'),
+          )
+          .expand(
+            (subdirectory) => subdirectory
+                .listSync(followLinks: false)
+                .whereType<File>()
+                .map((file) => file.path),
+          ),
+    ];
+    for (final filePath in onnxFiles) {
+      if (p.extension(filePath).toLowerCase() != '.onnx') continue;
 
-      final labelsPath = await _findLabelsFile(entity.path);
-      final kind = _inferKind(entity.path, labelsPath);
+      final labelsPath = await _findLabelsFile(filePath);
+      final kind = _inferKind(filePath, labelsPath);
       if (!allowedKinds.contains(kind)) continue;
 
       result.add(
         LocalOnnxModelDescriptor(
-          name: p.basename(entity.path),
-          path: entity.path,
+          name: p.basename(filePath),
+          path: filePath,
           kind: kind,
           labelsPath: labelsPath,
         ),
@@ -563,6 +599,9 @@ class LocalOnnxModelService {
     if (lowerPath.contains('eva02_large_patch14')) {
       return LocalOnnxModelKind.animeTimmEva02;
     }
+    if (lower.contains('pixai') || lowerLabels.endsWith('tags.json')) {
+      return LocalOnnxModelKind.pixaiTagger;
+    }
     if (lower.contains('wd14') ||
         lower.contains('wd-v1-4') ||
         lower.contains('wd-v1-5') ||
@@ -604,6 +643,7 @@ class LocalOnnxModelService {
       'classes.txt',
       'tag_mapping.json',
       'model_vocabulary.json',
+      'tags.json',
     ]) {
       final candidate = p.join(directory, name);
       if (await File(candidate).exists()) {

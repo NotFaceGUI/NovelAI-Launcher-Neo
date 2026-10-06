@@ -6577,6 +6577,25 @@ class AppLocalizationsJa extends AppLocalizations {
       '一般/キャラクタータグのみが出力されます。評価、アーティスト、著作権、メタ、その他のカテゴリはフィルターされます。';
 
   @override
+  String get reversePrompt_taggerFilterHintPixai =>
+      '一般/キャラクター/著作権/スタイルタグが出力されます。メタと評価はフィルターされます。';
+
+  @override
+  String get reversePrompt_pixaiDownloadAction => 'PixAI Tagger v1.0 をダウンロード';
+
+  @override
+  String get reversePrompt_pixaiDownloadHint =>
+      '合計約 1.96 GB。アプリのタガーモデルフォルダーに保存され、中断したダウンロードは自動的に再開されます。';
+
+  @override
+  String reversePrompt_pixaiDownloading(String progress) {
+    return 'PixAI Tagger をダウンロード中（$progress）';
+  }
+
+  @override
+  String get reversePrompt_pixaiDownloadFailed => 'PixAI tagger のダウンロードに失敗しました';
+
+  @override
   String get reversePrompt_replacementEmptyHint =>
       '置換対象キャラクターが選択されていません。ここでタグライブラリからキャラクターを選択します。プロンプトには挿入されません。';
 
@@ -6845,6 +6864,13 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get promptAssistant_taskRoutingSubtitle =>
       '最適化、翻訳、リバースプロンプト、キャラクター置換をさまざまなプロバイダーとモデルに割り当てます';
+
+  @override
+  String get promptAssistant_localInterrogateSwitch => 'Agent ローカル反推';
+
+  @override
+  String get promptAssistant_localInterrogateSubtitle =>
+      'Agent の反推ツールはローカル ONNX タガーでデバイス上の処理に切り替わり、画像はどのリモートサービスにも送信されず、生成されたプロンプトはツール結果として会話に取り込まれます。モデルとしきい値は画像生成ページの反推パネルの設定に従います。';
 
   @override
   String promptAssistant_taskRouteTitle(Object title) {
@@ -9940,6 +9966,33 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get settings_localOnnxTaggerFolder => 'ローカル ONNX タガー モデル';
+
+  @override
+  String get settings_pixaiTaggerDownloadSource => 'PixAI tagger のダウンロード元';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceSubtitle =>
+      'HTTPS ベース URL。空欄で公式ソースを使用します';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceDialogTitle =>
+      'PixAI tagger のダウンロード元';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceDialogHint =>
+      'https://…/pixai-tagger-v1.0-onnx/resolve/main';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceInvalid =>
+      'ダウンロード元は HTTPS アドレスである必要があります';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceSaved =>
+      'PixAI tagger のダウンロード元を保存しました';
+
+  @override
+  String get settings_pixaiTaggerDownloadSourceReset =>
+      'PixAI tagger のダウンロード元を公式ソースに戻しました';
 
   @override
   String get settings_notConfigured => '未構成';
