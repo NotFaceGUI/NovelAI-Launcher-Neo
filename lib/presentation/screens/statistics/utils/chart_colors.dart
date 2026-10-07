@@ -28,6 +28,24 @@ class ChartColors {
     Color(0xFFEF4444), // Red (hot)
   ];
 
+  /// GitHub 风格单色阶热力图色带：索引 0 为空档，1-4 为主题色渐进强度。
+  static List<Color> heatmapShades(ColorScheme colorScheme) {
+    return [
+      colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+      colorScheme.primary.withValues(alpha: 0.30),
+      colorScheme.primary.withValues(alpha: 0.55),
+      colorScheme.primary.withValues(alpha: 0.78),
+      colorScheme.primary,
+    ];
+  }
+
+  /// 按 0.0-1.0 的值在色带中取整档颜色（分档数据恰好落档）。
+  static Color heatmapShade(List<Color> shades, double value) {
+    final clamped = value.clamp(0.0, 1.0);
+    final index = (clamped * (shades.length - 1)).round();
+    return shades[index];
+  }
+
   /// Stacked area chart colors - Soft harmonious palette
   static const List<Color> stackedAreaPalette = [
     Color(0xFF60A5FA), // Light Blue

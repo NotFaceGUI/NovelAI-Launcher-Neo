@@ -8002,6 +8002,38 @@ class AppLocalizationsEn extends AppLocalizations {
   String get statistics_heatmapNoActivity => 'No activity';
 
   @override
+  String statistics_heatmapCellLabel(Object date, Object count) {
+    return '$date: $count generated';
+  }
+
+  @override
+  String statistics_heatmapCellEmpty(Object date) {
+    return '$date: no generations';
+  }
+
+  @override
+  String statistics_heatmapSummary(Object weeks, Object count) {
+    return '$count generations in $weeks weeks';
+  }
+
+  @override
+  String statistics_heatmapBestDay(Object count) {
+    return '$count in a single day';
+  }
+
+  @override
+  String get statistics_weekTrend => 'WoW';
+
+  @override
+  String get statistics_metricActiveDays => 'Active Days';
+
+  @override
+  String get statistics_metricStreak => 'Current Streak';
+
+  @override
+  String get statistics_metricDailyAvg => 'Daily Average';
+
+  @override
   String get sendToHome_dialogTitle => 'Send to Home';
 
   @override

@@ -3723,6 +3723,36 @@
     }
   },
   "statistics_heatmapNoActivity": "無活動",
+  "statistics_heatmapCellLabel": "{date} 生成 {count} 張",
+  "@statistics_heatmapCellLabel": {
+    "placeholders": {
+      "date": {},
+      "count": {}
+    }
+  },
+  "statistics_heatmapCellEmpty": "{date} 無生成",
+  "@statistics_heatmapCellEmpty": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "statistics_heatmapSummary": "{weeks} 週共生成 {count} 張",
+  "@statistics_heatmapSummary": {
+    "placeholders": {
+      "weeks": {},
+      "count": {}
+    }
+  },
+  "statistics_heatmapBestDay": "單日最高 {count} 張",
+  "@statistics_heatmapBestDay": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "statistics_weekTrend": "週環比",
+  "statistics_metricActiveDays": "活躍天數",
+  "statistics_metricStreak": "連續活躍",
+  "statistics_metricDailyAvg": "日均產出",
   "sendToHome_dialogTitle": "傳送到主頁",
   "sendToHome_send": "傳送",
   "sendToHome_mainPrompt": "傳送到主提示詞",

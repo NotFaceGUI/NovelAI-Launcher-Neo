@@ -14182,6 +14182,54 @@ abstract class AppLocalizations {
   /// **'No activity'**
   String get statistics_heatmapNoActivity;
 
+  /// No description provided for @statistics_heatmapCellLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{date}: {count} generated'**
+  String statistics_heatmapCellLabel(Object date, Object count);
+
+  /// No description provided for @statistics_heatmapCellEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'{date}: no generations'**
+  String statistics_heatmapCellEmpty(Object date);
+
+  /// No description provided for @statistics_heatmapSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} generations in {weeks} weeks'**
+  String statistics_heatmapSummary(Object weeks, Object count);
+
+  /// No description provided for @statistics_heatmapBestDay.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} in a single day'**
+  String statistics_heatmapBestDay(Object count);
+
+  /// No description provided for @statistics_weekTrend.
+  ///
+  /// In en, this message translates to:
+  /// **'WoW'**
+  String get statistics_weekTrend;
+
+  /// No description provided for @statistics_metricActiveDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Active Days'**
+  String get statistics_metricActiveDays;
+
+  /// No description provided for @statistics_metricStreak.
+  ///
+  /// In en, this message translates to:
+  /// **'Current Streak'**
+  String get statistics_metricStreak;
+
+  /// No description provided for @statistics_metricDailyAvg.
+  ///
+  /// In en, this message translates to:
+  /// **'Daily Average'**
+  String get statistics_metricDailyAvg;
+
   /// No description provided for @sendToHome_dialogTitle.
   ///
   /// In en, this message translates to:

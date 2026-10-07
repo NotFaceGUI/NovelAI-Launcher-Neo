@@ -9,6 +9,10 @@ class MetricCard extends StatefulWidget {
   final IconData icon;
   final String label;
   final String value;
+
+  /// 自定义值区域构建器（用于数字滚动等动效），非空时替代 [value] 文本。
+  final Widget Function(TextStyle valueStyle)? valueBuilder;
+
   final Color? iconColor;
   final TrendData? trend;
   final List<double>? sparklineData;
@@ -20,6 +24,7 @@ class MetricCard extends StatefulWidget {
     required this.icon,
     required this.label,
     required this.value,
+    this.valueBuilder,
     this.iconColor,
     this.trend,
     this.sparklineData,
@@ -106,6 +111,13 @@ class _MetricCardState extends State<MetricCard> {
     Color effectiveIconColor,
     bool isDark,
   ) {
+    final valueStyle = theme.textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: colorScheme.onSurface,
+          letterSpacing: -0.3,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ) ??
+        const TextStyle(fontSize: 20, fontWeight: FontWeight.bold);
     return Row(
       children: [
         // Icon container
@@ -119,23 +131,27 @@ class _MetricCardState extends State<MetricCard> {
         ),
         const SizedBox(width: 12),
         // Label
-        Text(
-          widget.label,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w500,
+        Flexible(
+          child: Text(
+            widget.label,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
         const Spacer(),
         // Value
-        Text(
-          widget.value,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: colorScheme.onSurface,
-            letterSpacing: -0.3,
-            fontFeatures: const [FontFeature.tabularFigures()],
-          ),
+        Flexible(
+          child: widget.valueBuilder?.call(valueStyle) ??
+              Text(
+                widget.value,
+                style: valueStyle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
         ),
         if (widget.trend != null) ...[
           const SizedBox(width: 10),
@@ -152,6 +168,13 @@ class _MetricCardState extends State<MetricCard> {
     Color effectiveIconColor,
     bool isDark,
   ) {
+    final valueStyle = theme.textTheme.headlineMedium?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: colorScheme.onSurface,
+          letterSpacing: -0.5,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ) ??
+        const TextStyle(fontSize: 28, fontWeight: FontWeight.bold);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -188,17 +211,13 @@ class _MetricCardState extends State<MetricCard> {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Expanded(
-              child: Text(
-                widget.value,
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: colorScheme.onSurface,
-                  letterSpacing: -0.5,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              child: widget.valueBuilder?.call(valueStyle) ??
+                  Text(
+                    widget.value,
+                    style: valueStyle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
             ),
             if (widget.trend != null) TrendIndicator(data: widget.trend!),
           ],

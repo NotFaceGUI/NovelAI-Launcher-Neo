@@ -7686,6 +7686,38 @@ class AppLocalizationsZh extends AppLocalizations {
   String get statistics_heatmapNoActivity => '无活动';
 
   @override
+  String statistics_heatmapCellLabel(Object date, Object count) {
+    return '$date 生成 $count 张';
+  }
+
+  @override
+  String statistics_heatmapCellEmpty(Object date) {
+    return '$date 无生成';
+  }
+
+  @override
+  String statistics_heatmapSummary(Object weeks, Object count) {
+    return '$weeks 周共生成 $count 张';
+  }
+
+  @override
+  String statistics_heatmapBestDay(Object count) {
+    return '单日最高 $count 张';
+  }
+
+  @override
+  String get statistics_weekTrend => '周环比';
+
+  @override
+  String get statistics_metricActiveDays => '活跃天数';
+
+  @override
+  String get statistics_metricStreak => '连续活跃';
+
+  @override
+  String get statistics_metricDailyAvg => '日均产出';
+
+  @override
   String get sendToHome_dialogTitle => '发送到主页';
 
   @override
@@ -23147,6 +23179,38 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get statistics_heatmapNoActivity => '無活動';
+
+  @override
+  String statistics_heatmapCellLabel(Object date, Object count) {
+    return '$date 生成 $count 張';
+  }
+
+  @override
+  String statistics_heatmapCellEmpty(Object date) {
+    return '$date 無生成';
+  }
+
+  @override
+  String statistics_heatmapSummary(Object weeks, Object count) {
+    return '$weeks 週共生成 $count 張';
+  }
+
+  @override
+  String statistics_heatmapBestDay(Object count) {
+    return '單日最高 $count 張';
+  }
+
+  @override
+  String get statistics_weekTrend => '週環比';
+
+  @override
+  String get statistics_metricActiveDays => '活躍天數';
+
+  @override
+  String get statistics_metricStreak => '連續活躍';
+
+  @override
+  String get statistics_metricDailyAvg => '日均產出';
 
   @override
   String get sendToHome_dialogTitle => '傳送到主頁';

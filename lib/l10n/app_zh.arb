@@ -3724,6 +3724,36 @@
     }
   },
   "statistics_heatmapNoActivity": "无活动",
+  "statistics_heatmapCellLabel": "{date} 生成 {count} 张",
+  "@statistics_heatmapCellLabel": {
+    "placeholders": {
+      "date": {},
+      "count": {}
+    }
+  },
+  "statistics_heatmapCellEmpty": "{date} 无生成",
+  "@statistics_heatmapCellEmpty": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "statistics_heatmapSummary": "{weeks} 周共生成 {count} 张",
+  "@statistics_heatmapSummary": {
+    "placeholders": {
+      "weeks": {},
+      "count": {}
+    }
+  },
+  "statistics_heatmapBestDay": "单日最高 {count} 张",
+  "@statistics_heatmapBestDay": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "statistics_weekTrend": "周环比",
+  "statistics_metricActiveDays": "活跃天数",
+  "statistics_metricStreak": "连续活跃",
+  "statistics_metricDailyAvg": "日均产出",
 
   "sendToHome_dialogTitle": "发送到主页",
   "sendToHome_send": "发送",

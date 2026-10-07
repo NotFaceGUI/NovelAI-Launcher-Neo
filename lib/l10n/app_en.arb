@@ -3697,6 +3697,36 @@
     }
   },
   "statistics_heatmapNoActivity": "No activity",
+  "statistics_heatmapCellLabel": "{date}: {count} generated",
+  "@statistics_heatmapCellLabel": {
+    "placeholders": {
+      "date": {},
+      "count": {}
+    }
+  },
+  "statistics_heatmapCellEmpty": "{date}: no generations",
+  "@statistics_heatmapCellEmpty": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "statistics_heatmapSummary": "{count} generations in {weeks} weeks",
+  "@statistics_heatmapSummary": {
+    "placeholders": {
+      "weeks": {},
+      "count": {}
+    }
+  },
+  "statistics_heatmapBestDay": "{count} in a single day",
+  "@statistics_heatmapBestDay": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "statistics_weekTrend": "WoW",
+  "statistics_metricActiveDays": "Active Days",
+  "statistics_metricStreak": "Current Streak",
+  "statistics_metricDailyAvg": "Daily Average",
 
   "sendToHome_dialogTitle": "Send to Home",
   "sendToHome_send": "Send",

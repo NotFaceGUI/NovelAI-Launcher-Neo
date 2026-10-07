@@ -3628,6 +3628,36 @@
     }
   },
   "statistics_heatmapNoActivity": "アクティビティはありません",
+  "statistics_heatmapCellLabel": "{date} に {count} 枚生成",
+  "@statistics_heatmapCellLabel": {
+    "placeholders": {
+      "date": {},
+      "count": {}
+    }
+  },
+  "statistics_heatmapCellEmpty": "{date} 生成なし",
+  "@statistics_heatmapCellEmpty": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "statistics_heatmapSummary": "{weeks} 週間で {count} 枚生成",
+  "@statistics_heatmapSummary": {
+    "placeholders": {
+      "weeks": {},
+      "count": {}
+    }
+  },
+  "statistics_heatmapBestDay": "1日の最多 {count} 枚",
+  "@statistics_heatmapBestDay": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "statistics_weekTrend": "前週比",
+  "statistics_metricActiveDays": "アクティブ日数",
+  "statistics_metricStreak": "連続アクティブ",
+  "statistics_metricDailyAvg": "1日平均",
   "sendToHome_dialogTitle": "ホームに送信",
   "sendToHome_send": "送信",
   "sendToHome_mainPrompt": "メイン プロンプトに送信",

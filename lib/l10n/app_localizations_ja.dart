@@ -7808,6 +7808,38 @@ class AppLocalizationsJa extends AppLocalizations {
   String get statistics_heatmapNoActivity => 'アクティビティはありません';
 
   @override
+  String statistics_heatmapCellLabel(Object date, Object count) {
+    return '$date に $count 枚生成';
+  }
+
+  @override
+  String statistics_heatmapCellEmpty(Object date) {
+    return '$date 生成なし';
+  }
+
+  @override
+  String statistics_heatmapSummary(Object weeks, Object count) {
+    return '$weeks 週間で $count 枚生成';
+  }
+
+  @override
+  String statistics_heatmapBestDay(Object count) {
+    return '1日の最多 $count 枚';
+  }
+
+  @override
+  String get statistics_weekTrend => '前週比';
+
+  @override
+  String get statistics_metricActiveDays => 'アクティブ日数';
+
+  @override
+  String get statistics_metricStreak => '連続アクティブ';
+
+  @override
+  String get statistics_metricDailyAvg => '1日平均';
+
+  @override
   String get sendToHome_dialogTitle => 'ホームに送信';
 
   @override

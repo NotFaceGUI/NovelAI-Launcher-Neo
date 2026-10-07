@@ -5,6 +5,7 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 import '../../adaptive/interaction_policy.dart';
 import '../../themes/core/layered_surface_style.dart';
+import '../../widgets/app_branch_visibility.dart';
 import '../../widgets/statistics/export_dialog.dart';
 import 'statistics_state.dart';
 import 'widgets/widgets.dart';
@@ -164,36 +165,61 @@ class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
         children: [
           StaggeredGridTile.fit(
             crossAxisCellCount: crossAxisCount,
-            child: OverviewStatsRow(stats: stats),
+            child: _StaggeredEntrance(
+              index: 0,
+              child: OverviewStatsRow(stats: stats),
+            ),
+          ),
+          // 主图：活动热力图占满整行。
+          StaggeredGridTile.fit(
+            crossAxisCellCount: crossAxisCount,
+            child: _StaggeredEntrance(
+              index: 1,
+              child: ActivityHeatmapCard(dailyTrends: stats.dailyTrends),
+            ),
           ),
           StaggeredGridTile.fit(
             crossAxisCellCount: 1,
-            child: OtherStatsCard(stats: stats),
+            child: _StaggeredEntrance(
+              index: 2,
+              child: OtherStatsCard(stats: stats),
+            ),
           ),
           const StaggeredGridTile.fit(
             crossAxisCellCount: 1,
-            child: AnlasCostCard(),
+            child: _StaggeredEntrance(
+              index: 3,
+              child: AnlasCostCard(),
+            ),
           ),
           StaggeredGridTile.fit(
             crossAxisCellCount: 1,
-            child: SamplerDistributionCard(stats: stats),
+            child: _StaggeredEntrance(
+              index: 4,
+              child: SamplerDistributionCard(stats: stats),
+            ),
           ),
           StaggeredGridTile.fit(
             crossAxisCellCount: 1,
-            child: AspectRatioCard(stats: stats),
+            child: _StaggeredEntrance(
+              index: 5,
+              child: AspectRatioCard(stats: stats),
+            ),
           ),
           StaggeredGridTile.fit(
             crossAxisCellCount: 1,
-            child: ActivityHeatmapCard(dailyTrends: stats.dailyTrends),
+            child: _StaggeredEntrance(
+              index: 6,
+              child: HourlyDistributionCard(hourlyData: stats.hourlyDistribution),
+            ),
           ),
           StaggeredGridTile.fit(
             crossAxisCellCount: 1,
-            child: HourlyDistributionCard(hourlyData: stats.hourlyDistribution),
-          ),
-          StaggeredGridTile.fit(
-            crossAxisCellCount: 1,
-            child: WeekdayDistributionCard(
-              weekdayData: stats.weekdayDistribution,
+            child: _StaggeredEntrance(
+              index: 7,
+              child: WeekdayDistributionCard(
+                weekdayData: stats.weekdayDistribution,
+              ),
             ),
           ),
         ],
@@ -251,4 +277,77 @@ int statisticsDashboardColumnCount(double availableWidth, double textScale) {
   if (effectiveWidth < 600) return 1;
   if (effectiveWidth < 900) return 2;
   return 3;
+}
+
+/// 仪表盘卡片交错入场：淡入并轻微上移，遵循系统"减少动态效果"设置。
+class _StaggeredEntrance extends StatefulWidget {
+  final int index;
+  final Widget child;
+
+  const _StaggeredEntrance({required this.index, required this.child});
+
+  @override
+  State<_StaggeredEntrance> createState() => _StaggeredEntranceState();
+}
+
+class _StaggeredEntranceState extends State<_StaggeredEntrance>
+    with SingleTickerProviderStateMixin {
+  static const _slotInterval = 0.055;
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 850),
+  );
+  late final Animation<double> _animation = CurvedAnimation(
+    parent: _controller,
+    curve: Interval(
+      (widget.index * _slotInterval).clamp(0.0, 0.55),
+      ((widget.index * _slotInterval) + 0.45).clamp(0.0, 1.0),
+      curve: Curves.easeOutCubic,
+    ),
+  );
+  bool _hasPlayed = false;
+  bool _wasVisible = true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 分支壳层用 IndexedStack 保活页面，State 不会随导航重建；
+    // 依赖分支可见性，在重新进入统计页时重播入场动画。
+    final visible = AppBranchVisibility.of(context);
+    final reducedMotion = MediaQuery.disableAnimationsOf(context);
+    final shouldPlay = !_hasPlayed || (visible && !_wasVisible);
+    _hasPlayed = true;
+    _wasVisible = visible;
+    if (reducedMotion) {
+      _controller.value = 1;
+      return;
+    }
+    if (shouldPlay) {
+      _controller.forward(from: 0);
+    } else if (!visible) {
+      _controller.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _animation,
+      child: AnimatedBuilder(
+        animation: _animation,
+        builder: (context, child) => Transform.translate(
+          offset: Offset(0, (1 - _animation.value) * 12),
+          child: child,
+        ),
+        child: widget.child,
+      ),
+    );
+  }
 }
