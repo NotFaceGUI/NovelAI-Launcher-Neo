@@ -4,7 +4,9 @@ import 'dart:typed_data';
 import '../../../core/agent/agent_types.dart';
 import '../../../core/agent/harness/tools/image.dart';
 import '../../../core/constants/api_constants.dart';
+import '../../../core/utils/app_logger.dart';
 import '../../../core/utils/display_thumbnail_utils.dart';
+import '../../../core/utils/inpaint_mask/inpaint_mask_preview.dart';
 import '../../../core/utils/nai_resolution_adapter.dart';
 import '../../../data/models/image/image_params.dart';
 import '../../../data/models/inpaint/inpaint_draft.dart';
@@ -101,4 +103,42 @@ Future<AgentToolResult> buildManualInpaintDraftResult(
     );
   }
   return AgentToolResult(content: content, details: details);
+}
+
+/// 把源图与二值蒙版叠加成一张预览，供模型确认蒙版落在什么位置。
+///
+/// 渲染失败时返回 null（只丢预览，不影响工具结果本身）。
+Future<ToolResultContent?> buildMaskOverlayContent({
+  required Uint8List source,
+  required Uint8List maskBinary,
+  required int width,
+  required int height,
+}) async {
+  try {
+    final preview = await InpaintMaskPreview.renderAsync(
+      sourceImage: source,
+      maskBinary: maskBinary,
+      width: width,
+      height: height,
+    );
+    if (preview == null) return null;
+    final mimeType = detectSupportedImageMimeType(preview);
+    if (mimeType == null) return null;
+    return ToolResultImageContent(
+      ImageContent(
+        source: ImageSource.base64(
+          mimeType: mimeType,
+          base64Data: base64Encode(preview),
+        ),
+      ),
+    );
+  } on Object catch (error, stackTrace) {
+    AppLogger.e(
+      'Inpaint mask preview rendering failed',
+      error,
+      stackTrace,
+      'AgentChat',
+    );
+    return null;
+  }
 }

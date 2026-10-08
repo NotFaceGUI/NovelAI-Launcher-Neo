@@ -24,7 +24,49 @@ List<AgentTool> buildManualInpaintToolDefinitions({
   required ManualInpaintToolHandler createMask,
   required ManualInpaintToolHandler expandCanvas,
   required ManualInpaintToolHandler loadIntoPanel,
+  required ManualInpaintToolHandler getCurrentMask,
+  required ManualInpaintToolHandler adoptCurrentMask,
 }) => [
+  DefinedAgentTool(
+    name: 'get_current_inpaint_mask',
+    label: 'Get Current Inpaint Mask',
+    description:
+        'Read the mask the user painted on the Generation page inpaint panel, '
+        'with the source image it belongs to, the focused-inpainting state and '
+        'an overlay preview of the masked area. Check this before authoring any '
+        'inpaint mask: when the user already painted one, that region is what '
+        'they mean, and drawing a new one with create_inpaint_mask would '
+        'repaint something else. Reports hasMask: false when nothing is '
+        'painted yet. Never spends Anlas.',
+    parameters: const {
+      'type': 'object',
+      'properties': {
+        'preview': {'type': 'boolean'},
+      },
+    },
+    executeFn: (_, arguments) => getCurrentMask(arguments),
+  ),
+  DefinedAgentTool(
+    name: 'adopt_current_inpaint_mask',
+    label: 'Adopt Current Inpaint Mask',
+    description:
+        'Store the mask the user painted on the Generation page as a ready '
+        'inpaint draft, carrying over the source image, prompt, focused '
+        'inpainting state and outpaint flag the page holds. This never '
+        'generates and never spends Anlas; follow it with '
+        'submit_manual_inpaint_draft, which is what charges. Prefer this over '
+        'create_inpaint_mask whenever get_current_inpaint_mask reports '
+        'hasMask: true.',
+    parameters: const {
+      'type': 'object',
+      'properties': {
+        'prompt': {'type': 'string'},
+        'params': {'type': 'object'},
+        'preview': {'type': 'boolean'},
+      },
+    },
+    executeFn: (_, arguments) => adoptCurrentMask(arguments),
+  ),
   DefinedAgentTool(
     name: 'load_inpaint_draft_into_panel',
     label: 'Load Inpaint Draft Into Panel',

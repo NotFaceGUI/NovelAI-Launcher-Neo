@@ -521,6 +521,149 @@ void main() {
       },
     );
   });
+
+  group('current page mask', () {
+    ProviderContainer containerWith(ImageParams params) => ProviderContainer(
+      overrides: [
+        generationParamsNotifierProvider.overrideWith(
+          () => _FixedParamsNotifier(params),
+        ),
+      ],
+    );
+
+    ManualInpaintToolbox toolboxFor(
+      ProviderContainer container,
+      InpaintDraftFileRepository drafts,
+    ) => ManualInpaintToolbox(
+      container.read(_refProvider),
+      supportDirectory: root,
+      repository: drafts,
+      anlasEstimator: (_, _) => 7,
+      activeSessionId: () => 'session-a',
+    );
+
+    test('a page without a painted mask says so instead of guessing', () async {
+      final container = containerWith(
+        ImageParams(sourceImage: _png(value: 30)),
+      );
+      addTearDown(container.dispose);
+      final drafts = InpaintDraftFileRepository(
+        rootDirectory: Directory('${root.path}/drafts'),
+      );
+      final tools = {
+        for (final tool in toolboxFor(container, drafts).tools())
+          tool.name: tool,
+      };
+
+      final read = await tools['get_current_inpaint_mask']!.execute(
+        'read',
+        const {},
+      );
+      final details = _json(read);
+      expect(details['hasMask'], isFalse);
+      expect(details['hasSourceImage'], isTrue);
+      expect(details['maskSource'], 'generation_page');
+      expect(details['next_step'], contains('create_manual_inpaint_draft'));
+
+      final adopted = await tools['adopt_current_inpaint_mask']!.execute(
+        'adopt',
+        const {},
+      );
+      expect(adopted.isError, isTrue);
+      expect(_json(adopted)['code'], 'no_current_mask');
+      expect(await drafts.list(), isEmpty);
+    });
+
+    test(
+      'the user-painted mask is visible and adopts into a ready draft',
+      () async {
+        final source = _png(value: 30, width: 8, height: 8);
+        final mask = _png(value: 255, width: 8, height: 8);
+        final container = containerWith(
+          ImageParams(
+            prompt: 'fix the hand',
+            sourceImage: source,
+            maskImage: mask,
+            action: ImageGenerationAction.infill,
+          ),
+        );
+        addTearDown(container.dispose);
+        final drafts = InpaintDraftFileRepository(
+          rootDirectory: Directory('${root.path}/drafts'),
+        );
+        final tools = {
+          for (final tool in toolboxFor(container, drafts).tools())
+            tool.name: tool,
+        };
+
+        final read = await tools['get_current_inpaint_mask']!.execute(
+          'read',
+          const {},
+        );
+        final details = _json(read);
+        expect(details['hasMask'], isTrue);
+        expect(details['maskCoverage'], 1.0);
+        expect(details['sizeMatchesSource'], isTrue);
+        expect(details['maskSize'], '8x8');
+        expect(read.content.whereType<ToolResultImageContent>(), hasLength(1));
+
+        final adopted = await tools['adopt_current_inpaint_mask']!.execute(
+          'adopt',
+          const {},
+        );
+        expect(adopted.isError, isFalse);
+        final adoptedDetails = _json(adopted);
+        expect(adoptedDetails['maskSource'], 'generation_page');
+        final draft = adoptedDetails['draft'] as Map<String, dynamic>;
+        final id = draft['draftId'] as String;
+        expect(draft['status'], 'ready');
+        expect(draft['prompt'], 'fix the hand');
+        expect((await drafts.get(id))!.estimatedAnlas, 7);
+        expect(await drafts.readMask(id), isNotNull);
+        expect(await drafts.readSource(id), isNotEmpty);
+
+        // 采用后的草稿能直接进入既有的提交链路。
+        final listed = await tools['list_manual_inpaint_drafts']!.execute(
+          'list',
+          const {},
+        );
+        expect((_json(listed)['drafts'] as List), hasLength(1));
+      },
+    );
+
+    test('a mask whose size does not match the source is refused', () async {
+      final container = containerWith(
+        ImageParams(
+          prompt: 'fix the hand',
+          sourceImage: _png(value: 30, width: 8, height: 8),
+          maskImage: _png(value: 255, width: 4, height: 4),
+          action: ImageGenerationAction.infill,
+        ),
+      );
+      addTearDown(container.dispose);
+      final drafts = InpaintDraftFileRepository(
+        rootDirectory: Directory('${root.path}/drafts'),
+      );
+      final tools = {
+        for (final tool in toolboxFor(container, drafts).tools())
+          tool.name: tool,
+      };
+
+      final read = await tools['get_current_inpaint_mask']!.execute(
+        'read',
+        const {},
+      );
+      expect(_json(read)['sizeMatchesSource'], isFalse);
+
+      final adopted = await tools['adopt_current_inpaint_mask']!.execute(
+        'adopt',
+        const {},
+      );
+      expect(adopted.isError, isTrue);
+      expect(_json(adopted)['code'], 'mask_source_mismatch');
+      expect(await drafts.list(), isEmpty);
+    });
+  });
 }
 
 Map<String, dynamic> _json(AgentToolResult result) =>
@@ -543,6 +686,15 @@ Uint8List _png({int value = 128, int width = 8, int height = 8}) {
   final image = img.Image(width: width, height: height);
   img.fill(image, color: img.ColorRgb8(value, value, value));
   return Uint8List.fromList(img.encodePng(image));
+}
+
+class _FixedParamsNotifier extends GenerationParamsNotifier {
+  _FixedParamsNotifier(this.params);
+
+  final ImageParams params;
+
+  @override
+  ImageParams build() => params;
 }
 
 class _TestGenerationParamsNotifier extends GenerationParamsNotifier {

@@ -34,6 +34,12 @@ String buildAgentSystemPromptBody({required bool webAccessEnabled}) {
         'submit_manual_inpaint_draft for ready drafts: exact zero-cost drafts '
         'can be submitted directly; for paid drafts report the estimate and '
         'use confirm=true, letting the application approval UI obtain consent.',
+    '- Before authoring any inpaint mask, call get_current_inpaint_mask: when '
+        'the user has already painted a mask on the Generation page, that '
+        'region is the one they mean, and re-drawing it yourself would repaint '
+        'something else. Adopt it with adopt_current_inpaint_mask (it never '
+        'generates and never charges), then submit_manual_inpaint_draft. '
+        'create_inpaint_mask is only for when no user-painted mask exists.',
     '- create_inpaint_mask authors the mask yourself instead of asking the '
         'user to draw it. Coordinates are 0-1 fractions of the image, so you '
         'must read the source image with the read tool first; the tool '

@@ -2,12 +2,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import '../../../core/agent/agent_types.dart';
-import '../../../core/agent/harness/tools/image.dart';
 import '../../../core/agent/resources/agent_chat_resource_reference_codec.dart';
-import '../../../core/utils/app_logger.dart';
 import '../../../core/utils/inpaint_mask/inpaint_mask_geometry.dart';
 import '../../../core/utils/inpaint_mask/inpaint_mask_operations.dart';
-import '../../../core/utils/inpaint_mask/inpaint_mask_preview.dart';
 import '../../../core/utils/inpaint_outpaint_utils.dart';
 import '../../../core/utils/nai_resolution_adapter.dart';
 import '../../../data/models/image/image_params.dart';
@@ -37,6 +34,12 @@ abstract interface class InpaintDraftAuthoringHost {
   String? get currentSessionId;
   int get requestBatchSize;
   ImageParams get baseGenerationParams;
+
+  /// 生成页当前的重绘面板状态：聚焦重绘开关与上下文像素下限。
+  ///
+  /// 用户手绘的蒙版与页面上这套设置是配套的，采用时必须一起快照，否则 chat 提交
+  /// 与面板提交会得到不同的裁剪与计价。
+  GenerationFocusedSnapshot get pageFocusedInpaint;
 
   Future<InpaintSourceResolution> resolveInpaintSource(
     Map<String, dynamic> args,
@@ -139,6 +142,135 @@ class InpaintDraftAuthoringService {
       contextPadding: request.contextPadding,
       includePreview: args['preview'] != false,
     );
+  }
+
+  /// 读生成页当前的底图与用户手绘蒙版。
+  ///
+  /// 用户画在生成页上的蒙版才是他要重绘的区域；模型看不到它，就会用
+  /// create_inpaint_mask 自己编一个区域。这里先把现状报清楚，并给出该走哪条路。
+  Future<AgentToolResult> describeCurrentMask(Map<String, dynamic> args) async {
+    final includePreview = args['preview'] != false;
+    final params = _host.baseGenerationParams;
+    final source = params.sourceImage;
+    final maskBytes = params.maskImage;
+    final prompt = params.prompt.trim();
+    final focused = _host.pageFocusedInpaint;
+    final details = <String, dynamic>{
+      'ok': true,
+      'maskSource': 'generation_page',
+      'hasSourceImage': source != null,
+      'hasMask': false,
+      'focusedInpaint': focused.enabled,
+      'isOutpaint': params.isOutpaint,
+      if (prompt.isNotEmpty) 'prompt': prompt,
+    };
+    final decoded =
+        maskBytes == null || !InpaintMaskUtils.hasMaskedPixels(maskBytes)
+        ? null
+        : InpaintMaskUtils.decodeBinaryMask(maskBytes);
+    if (source == null || decoded == null) {
+      details['next_step'] =
+          'The Generation page has no user-drawn mask right now. Do not invent '
+          'the region with create_inpaint_mask: ask the user to paint it in the '
+          'inpaint editor (create_manual_inpaint_draft), or use a geometry mask '
+          'only if they explicitly asked for that shape.';
+      return agentToolJsonResult(details);
+    }
+    details['hasMask'] = true;
+    final sourceSize = NaiResolutionAdapter.readImageSize(source);
+    details['maskSize'] = '${decoded.width}x${decoded.height}';
+    if (sourceSize != null) {
+      details['sourceSize'] = '${sourceSize.$1}x${sourceSize.$2}';
+      details['sizeMatchesSource'] =
+          sourceSize.$1 == decoded.width && sourceSize.$2 == decoded.height;
+    }
+    details['maskCoverage'] = _maskCoverage(decoded.mask);
+    details['next_step'] =
+        'This is the mask the user painted. adopt_current_inpaint_mask stores '
+        'it as a ready draft and submit_manual_inpaint_draft generates with it. '
+        'Never re-draw it with create_inpaint_mask.';
+    final content = <ToolResultContent>[
+      ToolResultTextContent(jsonEncode(details)),
+    ];
+    if (includePreview && sourceSize != null) {
+      final overlay = await buildMaskOverlayContent(
+        source: source,
+        maskBinary: decoded.mask,
+        width: decoded.width,
+        height: decoded.height,
+      );
+      if (overlay != null) content.add(overlay);
+    }
+    return AgentToolResult(content: content, details: details);
+  }
+
+  /// 把用户画在生成页上的蒙版连同底图、参数与聚焦设置存成 ready 草稿。
+  ///
+  /// 之后复用既有的 get / submit / reedit / load_inpaint_draft_into_panel 流程，
+  /// 不给 chat 单开一条绕过估价与审批的生成路径。
+  Future<AgentToolResult> createFromCurrentMask(
+    Map<String, dynamic> args,
+  ) async {
+    final params = _host.baseGenerationParams;
+    final source = params.sourceImage;
+    if (source == null) {
+      return agentToolError(
+        'no_source_image',
+        'The Generation page has no img2img source image, so there is nothing '
+            'to adopt a mask for.',
+      );
+    }
+    final maskBytes = params.maskImage;
+    final decoded =
+        maskBytes == null || !InpaintMaskUtils.hasMaskedPixels(maskBytes)
+        ? null
+        : InpaintMaskUtils.decodeBinaryMask(maskBytes);
+    if (decoded == null) {
+      return agentToolError(
+        'no_current_mask',
+        'The Generation page has no user-drawn mask. Ask the user to paint one '
+            '(create_manual_inpaint_draft) instead of inventing the region.',
+      );
+    }
+    final sourceSize = NaiResolutionAdapter.readImageSize(source);
+    if (sourceSize == null) {
+      return agentToolError(
+        'invalid_source',
+        'The page source image could not be decoded.',
+      );
+    }
+    if (sourceSize.$1 != decoded.width || sourceSize.$2 != decoded.height) {
+      return agentToolError(
+        'mask_source_mismatch',
+        'The mask is ${decoded.width}x${decoded.height} but the source image '
+            'is ${sourceSize.$1}x${sourceSize.$2}; ask the user to repaint it.',
+      );
+    }
+    final prompt = (args['prompt'] as String?)?.trim() ?? params.prompt.trim();
+    if (prompt.isEmpty) {
+      return agentToolError('invalid_prompt', 'prompt must not be empty.');
+    }
+    final focused = _host.pageFocusedInpaint;
+    return _commit(
+      source: source,
+      maskBinary: decoded.mask,
+      width: decoded.width,
+      height: decoded.height,
+      prompt: prompt,
+      paramOverrides: args['params'],
+      encodedReference: null,
+      focusedEnabled: focused.enabled,
+      contextPadding: focused.minimumContextMegaPixels.round(),
+      includePreview: args['preview'] != false,
+      sourceIsOutpaint: params.isOutpaint,
+      extraDetails: const {'maskSource': 'generation_page'},
+    );
+  }
+
+  double _maskCoverage(Uint8List maskBinary) {
+    if (maskBinary.isEmpty) return 0;
+    final masked = maskBinary.fold<int>(0, (total, value) => total + value);
+    return double.parse((masked / maskBinary.length).toStringAsFixed(4));
   }
 
   Future<AgentToolResult> createFromExpansion(Map<String, dynamic> args) async {
@@ -349,35 +481,12 @@ class InpaintDraftAuthoringService {
     required Uint8List maskBinary,
     required int width,
     required int height,
-  }) async {
-    try {
-      final preview = await InpaintMaskPreview.renderAsync(
-        sourceImage: source,
-        maskBinary: maskBinary,
-        width: width,
-        height: height,
-      );
-      if (preview == null) return null;
-      final mimeType = detectSupportedImageMimeType(preview);
-      if (mimeType == null) return null;
-      return ToolResultImageContent(
-        ImageContent(
-          source: ImageSource.base64(
-            mimeType: mimeType,
-            base64Data: base64Encode(preview),
-          ),
-        ),
-      );
-    } on Object catch (error, stackTrace) {
-      AppLogger.e(
-        'Inpaint mask preview rendering failed',
-        error,
-        stackTrace,
-        'AgentChat',
-      );
-      return null;
-    }
-  }
+  }) => buildMaskOverlayContent(
+    source: source,
+    maskBinary: maskBinary,
+    width: width,
+    height: height,
+  );
 
   /// 没有台账记录说明模型没真正看过这张图，坐标只能是猜的，不能放行到扣费环节。
   AgentToolResult? _requireObservedSource(String? filePath) {

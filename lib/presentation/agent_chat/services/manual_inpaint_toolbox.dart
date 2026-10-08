@@ -19,6 +19,7 @@ import '../../../data/models/inpaint/inpaint_draft.dart';
 import '../../../data/models/inpaint/inpaint_draft_status.dart';
 import '../../../data/services/inpaint_draft_file_repository.dart';
 import '../../../data/services/inpaint_draft_repository.dart';
+import '../../providers/generation/image_workflow_controller.dart';
 import '../../providers/image_generation_provider.dart';
 import '../../widgets/image_editor/image_editor_screen.dart';
 import 'agent_image_observation_ledger.dart';
@@ -152,6 +153,16 @@ class ManualInpaintToolbox implements InpaintDraftAuthoringHost {
   ImageParams get baseGenerationParams =>
       _ref.read(generationParamsNotifierProvider);
 
+  /// 生成页重绘面板的聚焦设置：用户手绘蒙版与它是配套的，采用时必须一起快照。
+  @override
+  GenerationFocusedSnapshot get pageFocusedInpaint {
+    final state = _ref.read(imageWorkflowControllerProvider);
+    return GenerationFocusedSnapshot(
+      enabled: state.focusedInpaintEnabled,
+      minimumContextMegaPixels: state.minimumContextMegaPixels,
+    );
+  }
+
   @override
   void bindDraftSession(String draftId, String sessionId) =>
       _draftSessionIds[draftId] = sessionId;
@@ -238,6 +249,8 @@ class ManualInpaintToolbox implements InpaintDraftAuthoringHost {
     createMask: _authoring.createFromGeometry,
     expandCanvas: _authoring.createFromExpansion,
     loadIntoPanel: _loadIntoPanel,
+    getCurrentMask: _authoring.describeCurrentMask,
+    adoptCurrentMask: _authoring.createFromCurrentMask,
   );
 
   Future<List<Map<String, dynamic>>> listDraftSummaries() async => [
