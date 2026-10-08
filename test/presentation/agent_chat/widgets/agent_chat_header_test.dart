@@ -281,6 +281,7 @@ Widget _app({
     selectPermissionMode: (_) async {},
     setWebAccessEnabled: (_) async {},
     pickImages: () async {},
+    pasteClipboardImage: (_) async {},
     attachCurrentCanvas: () async {},
     openReferenceGallery: () async {},
     openResourceLibrary: () async {},

@@ -699,6 +699,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Photos'), findsOneWidget);
+    expect(find.text('Clipboard image'), findsOneWidget);
     expect(find.text('Current canvas'), findsOneWidget);
     expect(find.text('Reference gallery'), findsOneWidget);
     expect(find.text('Resource library'), findsOneWidget);
@@ -716,11 +717,140 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Photos'), findsOneWidget);
+    expect(find.text('Clipboard image'), findsOneWidget);
     expect(find.text('Reference gallery'), findsOneWidget);
     expect(
       find.byType(PopupMenuItem<AgentChatAttachmentAction>),
-      findsNWidgets(4),
+      findsNWidgets(5),
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the attachment menu pastes a clipboard image without fallback', (
+    tester,
+  ) async {
+    var pastes = 0;
+    VoidCallback? fallback;
+    await _pumpComposer(
+      tester,
+      width: 840,
+      mobile: false,
+      onPasteClipboardImage: (value) {
+        pastes++;
+        fallback = value;
+      },
+    );
+
+    // 菜单必须用鼠标打开和选择：触摸点按会把交互策略切到触屏，重建后的加号
+    // 会换成移动端入口，已展开的弹层失去宿主。
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer();
+    final attachmentButton = find.byKey(
+      const ValueKey('agent-chat-more-actions'),
+    );
+    await mouse.moveTo(tester.getCenter(attachmentButton));
+    await mouse.down(tester.getCenter(attachmentButton));
+    await mouse.up();
+    await tester.pumpAndSettle();
+    await mouse.moveTo(tester.getCenter(find.text('Clipboard image')));
+    await mouse.down(tester.getCenter(find.text('Clipboard image')));
+    await mouse.up();
+    await tester.pumpAndSettle();
+
+    expect(pastes, 1);
+    expect(fallback, isNull, reason: '菜单入口没有文本粘贴可回退，改为提示剪贴板没有图片');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ctrl+v pastes a clipboard image and keeps a text fallback', (
+    tester,
+  ) async {
+    var pastes = 0;
+    VoidCallback? fallback;
+    await _pumpComposer(
+      tester,
+      width: 840,
+      mobile: false,
+      onPasteClipboardImage: (value) {
+        pastes++;
+        fallback = value;
+      },
+    );
+
+    await tester.tap(_input);
+    await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+
+    expect(pastes, 1);
+    expect(fallback, isNotNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the composer pastes clipboard text when the image misses', (
+    tester,
+  ) async {
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async => call.method == 'Clipboard.getData'
+          ? <String, dynamic>{'text': 'clipboard words'}
+          : null,
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    final controller = AgentChatPanelController();
+    addTearDown(controller.dispose);
+    VoidCallback? fallback;
+    await _pumpComposer(
+      tester,
+      width: 840,
+      mobile: false,
+      controller: controller,
+      onPasteClipboardImage: (value) => fallback = value,
+    );
+
+    await tester.tap(_input);
+    await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+
+    expect(fallback, isNotNull);
+    fallback!.call();
+    await tester.pumpAndSettle();
+
+    expect(controller.inputController.text, 'clipboard words');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('other paste chords keep the default composer handling', (
+    tester,
+  ) async {
+    var pastes = 0;
+    await _pumpComposer(
+      tester,
+      width: 840,
+      mobile: false,
+      onPasteClipboardImage: (_) => pastes++,
+    );
+
+    await tester.tap(_input);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+
+    expect(pastes, 0);
     expect(tester.takeException(), isNull);
   });
 
@@ -798,6 +928,97 @@ void main() {
     expect(controller.pendingImages, hasLength(1));
     expect(controller.inputController.text.trim(), '[image1]');
     expect(find.text('second.png'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('backspace removes the whole image token and its attachment', (
+    tester,
+  ) async {
+    final controller = _controllerWithPendingImages();
+    addTearDown(controller.dispose);
+    await _pumpComposer(
+      tester,
+      width: 840,
+      mobile: false,
+      controller: controller,
+    );
+    // 光标停在第二个标记之后：退格应整段吃掉标记，而不是删掉一个字符。
+    await _placeCaret(tester, controller, 17);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pump();
+
+    expect(controller.pendingImages, hasLength(1));
+    expect(controller.pendingImages.single.name, 'image0.png');
+    expect(controller.inputController.text.trim(), '[image1]');
+    expect(controller.inputController.imageCount, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('deleting a middle image token renumbers the remaining ones', (
+    tester,
+  ) async {
+    final controller = _controllerWithPendingImages(count: 3);
+    addTearDown(controller.dispose);
+    await _pumpComposer(
+      tester,
+      width: 840,
+      mobile: false,
+      controller: controller,
+    );
+    // 光标落在 [image2] 中间，退格同样整段删除这个标记。
+    await _placeCaret(tester, controller, 12);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pump();
+
+    expect(controller.pendingImages, hasLength(2));
+    expect(controller.inputController.text.trim(), '[image1] [image2]');
+    expect(find.text('image2.png'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('forward delete removes the image token before the caret', (
+    tester,
+  ) async {
+    final controller = _controllerWithPendingImages();
+    addTearDown(controller.dispose);
+    await _pumpComposer(
+      tester,
+      width: 840,
+      mobile: false,
+      controller: controller,
+    );
+    await _placeCaret(tester, controller, 0);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+    await tester.pump();
+
+    expect(controller.pendingImages, hasLength(1));
+    expect(controller.pendingImages.single.name, 'image1.png');
+    expect(controller.inputController.text.trim(), '[image1]');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('backspace away from a token still deletes one character', (
+    tester,
+  ) async {
+    final controller = _controllerWithPendingImages();
+    addTearDown(controller.dispose);
+    await _pumpComposer(
+      tester,
+      width: 840,
+      mobile: false,
+      controller: controller,
+    );
+    // 光标在末尾空格之后：只删空格，附件和标记都保留。
+    await _placeCaret(tester, controller, 18);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pump();
+
+    expect(controller.pendingImages, hasLength(2));
+    expect(controller.inputController.text, '[image1] [image2]');
     expect(tester.takeException(), isNull);
   });
 
@@ -1219,6 +1440,38 @@ void main() {
 final _input = find.byKey(const ValueKey('agent-chat-input'));
 final _slashMenu = find.byKey(const ValueKey('agent-chat-slash-menu'));
 
+final _pendingImageBytes = base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+);
+
+AgentChatPanelController _controllerWithPendingImages({int count = 2}) {
+  final controller = AgentChatPanelController();
+  for (var index = 0; index < count; index++) {
+    controller.addPendingImage(
+      PendingAgentChatImage(
+        name: 'image$index.png',
+        bytes: _pendingImageBytes,
+        mimeType: 'image/png',
+      ),
+    );
+  }
+  return controller;
+}
+
+/// 聚焦输入框并把光标固定到指定偏移。
+Future<void> _placeCaret(
+  WidgetTester tester,
+  AgentChatPanelController controller,
+  int offset,
+) async {
+  await tester.tap(_input);
+  await tester.pump();
+  controller.inputController.selection = TextSelection.collapsed(
+    offset: offset,
+  );
+  await tester.pump();
+}
+
 /// The editor holds the same literal text, so menu assertions must be scoped.
 Finder _inMenu(String text) =>
     find.descendant(of: _slashMenu, matching: find.text(text));
@@ -1257,6 +1510,7 @@ Future<void> _pumpComposer(
   Future<void> Function()? onSend,
   VoidCallback? onStop,
   Future<void> Function()? onAttachCurrentCanvas,
+  void Function(VoidCallback? fallbackTextPaste)? onPasteClipboardImage,
   void Function(AgentChatMoreAction action)? onMoreAction,
   AgentChatResourceReference? currentCanvasReference,
   PromptAssistantConfigState? config,
@@ -1298,6 +1552,7 @@ Future<void> _pumpComposer(
                 onSend: onSend,
                 onStop: onStop,
                 onAttachCurrentCanvas: onAttachCurrentCanvas,
+                onPasteClipboardImage: onPasteClipboardImage,
                 onMoreAction: onMoreAction,
                 currentCanvasReference: currentCanvasReference,
                 config: config,
@@ -1321,6 +1576,7 @@ class _ComposerHarness extends StatefulWidget {
     this.onSend,
     this.onStop,
     this.onAttachCurrentCanvas,
+    this.onPasteClipboardImage,
     this.onMoreAction,
     this.currentCanvasReference,
     this.config,
@@ -1334,6 +1590,7 @@ class _ComposerHarness extends StatefulWidget {
   final Future<void> Function()? onSend;
   final VoidCallback? onStop;
   final Future<void> Function()? onAttachCurrentCanvas;
+  final void Function(VoidCallback? fallbackTextPaste)? onPasteClipboardImage;
   final void Function(AgentChatMoreAction action)? onMoreAction;
   final AgentChatResourceReference? currentCanvasReference;
   final PromptAssistantConfigState? config;
@@ -1382,6 +1639,8 @@ class _ComposerHarnessState extends State<_ComposerHarness> {
       selectPermissionMode: (_) async {},
       setWebAccessEnabled: (_) async {},
       pickImages: () async {},
+      pasteClipboardImage: (fallbackTextPaste) async =>
+          widget.onPasteClipboardImage?.call(fallbackTextPaste),
       attachCurrentCanvas: widget.onAttachCurrentCanvas ?? () async {},
       openReferenceGallery: () async {},
       openResourceLibrary: () async {},

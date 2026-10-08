@@ -378,6 +378,7 @@
   "agentChat_slashSession": "会话",
   "agentChat_addAttachment": "添加附件或引用",
   "agentChat_photoLibrary": "相册",
+  "agentChat_clipboardImage": "剪贴板图片",
   "agentChat_currentCanvas": "当前画布",
   "agentChat_referenceGallery": "参考图库",
   "agentChat_resourceLibrary": "资源库",
@@ -396,6 +397,7 @@
   "agentChat_webAccessLabel": "联网",
   "agentChat_contextUsageLabel": "上下文",
   "agentChat_unsupportedImageFormat": "不支持的图片格式：{fileName}",
+  "agentChat_clipboardNoImage": "剪贴板里没有图片",
   "@agentChat_unsupportedImageFormat": {
     "placeholders": {
       "fileName": {}

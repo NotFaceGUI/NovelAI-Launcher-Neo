@@ -64,6 +64,7 @@ enum AgentChatMoreAction { newSession, rename, compact, delete }
 
 enum AgentChatAttachmentAction {
   images,
+  clipboardImage,
   currentCanvas,
   referenceGallery,
   resourceLibrary,
@@ -83,6 +84,7 @@ class AgentChatPanelCommands {
     required this.selectPermissionMode,
     required this.setWebAccessEnabled,
     required this.pickImages,
+    required this.pasteClipboardImage,
     required this.attachCurrentCanvas,
     required this.openReferenceGallery,
     required this.openResourceLibrary,
@@ -117,6 +119,14 @@ class AgentChatPanelCommands {
   final Future<void> Function(AgentPermissionMode mode) selectPermissionMode;
   final Future<void> Function(bool enabled) setWebAccessEnabled;
   final Future<void> Function() pickImages;
+
+  /// 把剪贴板里的图片贴成待上传附件。
+  ///
+  /// [fallbackTextPaste] 非空表示这次粘贴由键盘触发：剪贴板里没有图片时执行它，
+  /// 保留 Ctrl+V 原本的文本粘贴；为空表示用户从附件菜单显式选择，此时剪贴板没有
+  /// 图片会给出提示。
+  final Future<void> Function(VoidCallback? fallbackTextPaste)
+  pasteClipboardImage;
   final Future<void> Function() attachCurrentCanvas;
   final Future<void> Function() openReferenceGallery;
   final Future<void> Function() openResourceLibrary;

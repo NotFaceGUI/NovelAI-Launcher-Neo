@@ -393,6 +393,7 @@
   "agentChat_slashSession": "Session",
   "agentChat_addAttachment": "Add attachment or reference",
   "agentChat_photoLibrary": "Photos",
+  "agentChat_clipboardImage": "Clipboard image",
   "agentChat_currentCanvas": "Current canvas",
   "agentChat_referenceGallery": "Reference gallery",
   "agentChat_resourceLibrary": "Resource library",
@@ -411,6 +412,7 @@
   "agentChat_webAccessLabel": "Web access",
   "agentChat_contextUsageLabel": "Context",
   "agentChat_unsupportedImageFormat": "Unsupported image format: {fileName}",
+  "agentChat_clipboardNoImage": "No image in clipboard",
   "@agentChat_unsupportedImageFormat": {
     "placeholders": {
       "fileName": {}

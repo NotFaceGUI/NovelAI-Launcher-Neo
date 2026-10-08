@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -102,6 +103,31 @@ class _AgentChatComposerState extends State<AgentChatComposer> {
 
   void _moveSlashHighlight(int delta, int count) {
     setState(() => _slashHighlight = (_slashHighlight + delta + count) % count);
+  }
+
+  /// 只认不带其它修饰键的 Ctrl+V / ⌘V：Ctrl+Shift+V 等组合保留原语义，Windows
+  /// 上 AltGr 表现为 Ctrl+Alt 也不该被拦成粘贴。
+  bool _isClipboardPasteShortcut(LogicalKeyboardKey key) {
+    if (key != LogicalKeyboardKey.keyV) return false;
+    final keyboard = HardwareKeyboard.instance;
+    if (!keyboard.isControlPressed && !keyboard.isMetaPressed) return false;
+    return !keyboard.isShiftPressed && !keyboard.isAltPressed;
+  }
+
+  /// 剪贴板里没有图片时补一次默认文本粘贴。
+  ///
+  /// 这次按键已经在本层被声明处理，不会继续传给祖先的 Shortcuts，所以要手动把
+  /// [PasteTextIntent] 投给当前输入框，保持 Ctrl+V 原本的粘贴文本能力。
+  VoidCallback? _textPasteFallback() {
+    final focusedContext = FocusManager.instance.primaryFocus?.context;
+    if (focusedContext == null) return null;
+    return () {
+      if (!focusedContext.mounted) return;
+      Actions.maybeInvoke(
+        focusedContext,
+        const PasteTextIntent(SelectionChangedCause.keyboard),
+      );
+    };
   }
 
   /// 技能插入到输入框继续编辑；会话命令没有后续正文，选中即执行。
@@ -311,6 +337,23 @@ class _AgentChatComposerState extends State<AgentChatComposer> {
         final composing =
             controller.inputController.value.composing.isValid &&
             !controller.inputController.value.composing.isCollapsed;
+        // 剪贴板里是图片就把这次粘贴变成附件；不是图片再补一次默认文本粘贴。
+        if (event is KeyDownEvent &&
+            viewData.state.initialized &&
+            _isClipboardPasteShortcut(key)) {
+          unawaited(commands.pasteClipboardImage(_textPasteFallback()));
+          return KeyEventResult.handled;
+        }
+        // 退格/向后删除落在 [imageN] 标记上时整段删掉标记和对应附件；没碰到标记
+        // 就交回默认的按字符删除。
+        if (!composing &&
+            (key == LogicalKeyboardKey.backspace ||
+                key == LogicalKeyboardKey.delete) &&
+            controller.deleteImageToken(
+              backwards: key == LogicalKeyboardKey.backspace,
+            )) {
+          return KeyEventResult.handled;
+        }
         // 菜单开着时先于停止运行、队列编辑和发送处理，否则同一个键有两个归属。
         if (slashMatches.isNotEmpty && !composing) {
           if (key == LogicalKeyboardKey.escape) {
@@ -887,6 +930,11 @@ class _AgentChatComposerState extends State<AgentChatComposer> {
           l10n.agentChat_photoLibrary,
         ),
         _attachmentItem(
+          AgentChatAttachmentAction.clipboardImage,
+          Icons.content_paste_rounded,
+          l10n.agentChat_clipboardImage,
+        ),
+        _attachmentItem(
           AgentChatAttachmentAction.currentCanvas,
           Icons.crop_free_rounded,
           l10n.agentChat_currentCanvas,
@@ -953,6 +1001,12 @@ class _AgentChatComposerState extends State<AgentChatComposer> {
             ),
             _mobileAttachmentTile(
               sheetContext,
+              AgentChatAttachmentAction.clipboardImage,
+              Icons.content_paste_rounded,
+              l10n.agentChat_clipboardImage,
+            ),
+            _mobileAttachmentTile(
+              sheetContext,
               AgentChatAttachmentAction.currentCanvas,
               Icons.crop_free_rounded,
               l10n.agentChat_currentCanvas,
@@ -994,6 +1048,10 @@ class _AgentChatComposerState extends State<AgentChatComposer> {
   Future<void> _handleAttachmentAction(AgentChatAttachmentAction action) {
     return switch (action) {
       AgentChatAttachmentAction.images => commands.pickImages(),
+      // 菜单入口没有文本粘贴可回退，剪贴板为空时由协调器给出提示。
+      AgentChatAttachmentAction.clipboardImage => commands.pasteClipboardImage(
+        null,
+      ),
       AgentChatAttachmentAction.currentCanvas => commands.attachCurrentCanvas(),
       AgentChatAttachmentAction.referenceGallery =>
         commands.openReferenceGallery(),

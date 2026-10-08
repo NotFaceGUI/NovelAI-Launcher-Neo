@@ -385,6 +385,7 @@
   "agentChat_slashSession": "セッション",
   "agentChat_addAttachment": "添付または参照を追加",
   "agentChat_photoLibrary": "写真",
+  "agentChat_clipboardImage": "クリップボードの画像",
   "agentChat_currentCanvas": "現在のキャンバス",
   "agentChat_referenceGallery": "参照ギャラリー",
   "agentChat_resourceLibrary": "リソースライブラリ",
@@ -403,6 +404,7 @@
   "agentChat_webAccessLabel": "ウェブ",
   "agentChat_contextUsageLabel": "コンテキスト",
   "agentChat_unsupportedImageFormat": "サポートされていない画像形式です: {fileName}",
+  "agentChat_clipboardNoImage": "クリップボードに画像がありません",
   "@agentChat_unsupportedImageFormat": {
     "placeholders": {
       "fileName": {}

@@ -1919,6 +1919,12 @@ abstract class AppLocalizations {
   /// **'Photos'**
   String get agentChat_photoLibrary;
 
+  /// No description provided for @agentChat_clipboardImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Clipboard image'**
+  String get agentChat_clipboardImage;
+
   /// No description provided for @agentChat_currentCanvas.
   ///
   /// In en, this message translates to:
@@ -2020,6 +2026,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unsupported image format: {fileName}'**
   String agentChat_unsupportedImageFormat(Object fileName);
+
+  /// No description provided for @agentChat_clipboardNoImage.
+  ///
+  /// In en, this message translates to:
+  /// **'No image in clipboard'**
+  String get agentChat_clipboardNoImage;
 
   /// No description provided for @agentChat_newChat.
   ///

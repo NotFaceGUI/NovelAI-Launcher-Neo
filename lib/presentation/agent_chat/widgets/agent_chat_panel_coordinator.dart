@@ -18,10 +18,12 @@ import '../../prompt_assistant/services/provider_adapters/prompt_assistant_adapt
 import '../../widgets/common/app_toast.dart';
 import '../../widgets/common/themed_confirm_dialog.dart';
 import '../../widgets/common/themed_input_dialog.dart';
+import '../../utils/dropped_file_reader.dart';
 import '../models/agent_chat_compaction_outcome.dart';
 import '../models/agent_chat_prompt_envelope.dart';
 import '../models/agent_chat_slash_command.dart';
 import '../providers/agent_chat_notifier.dart';
+import '../services/agent_chat_clipboard_image.dart';
 import '../services/agent_chat_session_controller.dart';
 import 'agent_chat_panel_controller.dart';
 import 'agent_chat_panel_view_data.dart';
@@ -34,13 +36,19 @@ class AgentChatPanelCoordinator {
     required WidgetRef ref,
     required AgentChatPanelController controller,
     required bool Function() isMounted,
+    Future<DroppedFileData?> Function() readClipboardImage =
+        AgentChatClipboardImage.read,
   }) : _ref = ref,
        _controller = controller,
-       _isMounted = isMounted;
+       _isMounted = isMounted,
+       _readClipboardImage = readClipboardImage;
 
   final WidgetRef _ref;
   final AgentChatPanelController _controller;
   final bool Function() _isMounted;
+
+  /// 剪贴板图片来源，默认读系统剪贴板；测试可替换成固定内容。
+  final Future<DroppedFileData?> Function() _readClipboardImage;
 
   AgentChatPanelCommands commands(
     BuildContext context,
@@ -66,6 +74,8 @@ class AgentChatPanelCoordinator {
           .read(agentSettingsProvider.notifier)
           .setWebAccessEnabled(enabled),
       pickImages: () => _pickImages(context),
+      pasteClipboardImage: (fallbackTextPaste) =>
+          _pasteClipboardImage(context, fallbackTextPaste),
       attachCurrentCanvas: () =>
           _attachCurrentCanvas(context, currentCanvasReference),
       openReferenceGallery: () => AgentChatResourcePicker.showReferenceGallery(
@@ -177,37 +187,64 @@ class AgentChatPanelCoordinator {
         continue;
       }
       final bytes = await _readImageBytes(file);
-      if (!_isMounted()) return;
+      if (!_isMounted() || !context.mounted) return;
       if (bytes == null) continue;
-      if (bytes.length > _maxInlineImageBytes) {
-        if (!_isMounted() || !context.mounted) return;
-        _showPickError(
-          context,
-          context.l10n.agentChat_imageTooLarge(file.name, 20),
-        );
-        continue;
-      }
-      final mimeType = detectImageMime(bytes);
-      if (mimeType == null) {
-        if (!_isMounted() || !context.mounted) return;
-        _showPickError(
-          context,
-          context.l10n.agentChat_unsupportedImageFormat(file.name),
-        );
-        continue;
-      }
-      _controller.addPendingImage(
-        PendingAgentChatImage(
-          name: file.name,
-          bytes: bytes,
-          mimeType: mimeType,
-        ),
-      );
+      await _addImageAttachment(context, name: file.name, bytes: bytes);
     }
     if (_isMounted()) _controller.inputFocus.requestFocus();
   }
 
+  /// 粘贴走同一条入列路径：剪贴板里是图片就贴成附件，否则回退文本粘贴。
+  Future<void> _pasteClipboardImage(
+    BuildContext context,
+    VoidCallback? fallbackTextPaste,
+  ) async {
+    final pasted = await _readClipboardImage();
+    if (!_isMounted() || !context.mounted) return;
+    if (pasted == null) {
+      if (fallbackTextPaste != null) {
+        fallbackTextPaste();
+      } else {
+        _showPickError(context, context.l10n.agentChat_clipboardNoImage);
+      }
+      return;
+    }
+    final attached = await _addImageAttachment(
+      context,
+      name: pasted.fileName,
+      bytes: pasted.bytes,
+    );
+    if (!attached || !_isMounted()) return;
+    _controller.inputFocus.requestFocus();
+  }
+
   static const int _maxInlineImageBytes = 20 * 1024 * 1024;
+
+  /// 附件入列前的统一校验：超过内联上限或格式无法识别时提示并拒绝。
+  Future<bool> _addImageAttachment(
+    BuildContext context, {
+    required String name,
+    required Uint8List bytes,
+  }) async {
+    if (bytes.length > _maxInlineImageBytes) {
+      if (!_isMounted() || !context.mounted) return false;
+      _showPickError(context, context.l10n.agentChat_imageTooLarge(name, 20));
+      return false;
+    }
+    final mimeType = detectImageMime(bytes);
+    if (mimeType == null) {
+      if (!_isMounted() || !context.mounted) return false;
+      _showPickError(
+        context,
+        context.l10n.agentChat_unsupportedImageFormat(name),
+      );
+      return false;
+    }
+    _controller.addPendingImage(
+      PendingAgentChatImage(name: name, bytes: bytes, mimeType: mimeType),
+    );
+    return true;
+  }
 
   Future<void> _attachCurrentCanvas(
     BuildContext context,

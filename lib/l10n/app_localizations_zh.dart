@@ -960,6 +960,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentChat_photoLibrary => '相册';
 
   @override
+  String get agentChat_clipboardImage => '剪贴板图片';
+
+  @override
   String get agentChat_currentCanvas => '当前画布';
 
   @override
@@ -1013,6 +1016,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String agentChat_unsupportedImageFormat(Object fileName) {
     return '不支持的图片格式：$fileName';
   }
+
+  @override
+  String get agentChat_clipboardNoImage => '剪贴板里没有图片';
 
   @override
   String get agentChat_newChat => '新建聊天';
@@ -16455,6 +16461,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get agentChat_photoLibrary => '相簿';
 
   @override
+  String get agentChat_clipboardImage => '剪貼簿圖片';
+
+  @override
   String get agentChat_currentCanvas => '目前畫布';
 
   @override
@@ -16508,6 +16517,9 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String agentChat_unsupportedImageFormat(Object fileName) {
     return '不支援的圖片格式：$fileName';
   }
+
+  @override
+  String get agentChat_clipboardNoImage => '剪貼簿裡沒有圖片';
 
   @override
   String get agentChat_newChat => '新對話';

@@ -56,6 +56,7 @@ class AgentChatPanelController extends ChangeNotifier {
   static const double _nearBottomTolerance = 48.0;
   static const double _scrollMovementTolerance = 0.01;
   static const int _retainedSessionOffsetCount = 32;
+  static final RegExp _whitespacePattern = RegExp(r'\s');
   static final Set<LogicalKeyboardKey> _viewportScrollKeys = {
     LogicalKeyboardKey.arrowUp,
     LogicalKeyboardKey.arrowDown,
@@ -207,6 +208,61 @@ class AgentChatPanelController extends ChangeNotifier {
     );
     inputController.imageCount = _pendingImages.length;
     notifyListeners();
+  }
+
+  /// 删除键落在 `[imageN]` 标记上时整段删除标记，并同步移除对应附件。
+  ///
+  /// 标记是附件在正文里的唯一引用：按字符删只会把标记打成残片，附件却还留着，
+  /// 送出的正文也对不上。所以这里把删除范围扩展到完整标记，选区跨越多个标记时
+  /// 一并整段删除，后面的编号继续前移。
+  ///
+  /// [backwards] 区分退格与向后删除。返回 true 表示这次按键已由输入区处理，调用
+  /// 方不应再把它交给默认的按字符删除。
+  bool deleteImageToken({required bool backwards}) {
+    final value = inputController.value;
+    final selection = value.selection;
+    if (!selection.isValid) return false;
+    final text = value.text;
+    final collapsed = selection.isCollapsed;
+    var from = selection.start;
+    var to = selection.end;
+    final removedNumbers = <int>{};
+    var touchedToken = false;
+    final tokens = AgentChatInputController.imagePattern.allMatches(text);
+    for (final match in tokens) {
+      final touches = collapsed
+          ? (backwards
+                ? match.start < from && from <= match.end
+                : match.start <= from && from < match.end)
+          : match.start < to && match.end > from;
+      if (!touches) continue;
+      touchedToken = true;
+      if (match.start < from) from = match.start;
+      if (match.end > to) to = match.end;
+      final number = int.tryParse(match.group(1) ?? '');
+      if (number != null && number >= 1 && number <= _pendingImages.length) {
+        removedNumbers.add(number);
+      }
+    }
+    if (!touchedToken) return false;
+    // 标记两侧有空格时连一个空格一起删，避免留下双空格或行首空格。
+    if (from > 0 && _whitespacePattern.hasMatch(text[from - 1])) {
+      from -= 1;
+    } else if (to < text.length && _whitespacePattern.hasMatch(text[to])) {
+      to += 1;
+    }
+    hideInlineImagePreview();
+    inputController.value = TextEditingValue(
+      text: text.replaceRange(from, to, ''),
+      selection: TextSelection.collapsed(offset: from),
+      composing: TextRange.empty,
+    );
+    // 倒序移除，前面的编号在移除过程中保持有效。
+    final numbers = removedNumbers.toList()..sort((a, b) => b.compareTo(a));
+    for (final number in numbers) {
+      removePendingImage(number - 1);
+    }
+    return true;
   }
 
   List<PendingAgentChatImage> takePendingImages() {
@@ -801,6 +857,11 @@ class AgentChatPanelController extends ChangeNotifier {
       }
     });
   }
+
+  /// 用户是否正在以手势／滚轮驱动滚动。
+  ///
+  /// 这期间不该做任何漂移补偿：那会跟用户自己的滚动对打。
+  bool get userScrolling => _userScrollActive || _potentialUserScroll;
 
   /// Keeps a historical message at the same screen position while the live
   /// edge changes size in a reversed transcript.

@@ -979,6 +979,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get agentChat_photoLibrary => '写真';
 
   @override
+  String get agentChat_clipboardImage => 'クリップボードの画像';
+
+  @override
   String get agentChat_currentCanvas => '現在のキャンバス';
 
   @override
@@ -1032,6 +1035,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String agentChat_unsupportedImageFormat(Object fileName) {
     return 'サポートされていない画像形式です: $fileName';
   }
+
+  @override
+  String get agentChat_clipboardNoImage => 'クリップボードに画像がありません';
 
   @override
   String get agentChat_newChat => '新しいチャット';
