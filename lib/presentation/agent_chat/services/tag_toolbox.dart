@@ -50,9 +50,14 @@ class TagToolbox {
             '"translate" maps a Chinese (or English) concept to danbooru '
             'tags with Chinese meanings, requires the optional Chinese '
             'dictionary; "suggest" recommends statistically related tags '
-            'for one or more existing tags (comma-separated query), '
-            'requires the optional co-occurrence data pack. Requirements: '
-            '"query" is required; "limit" 1-30 (default 10). Results are '
+            'for one or more existing tags, requires the optional '
+            'co-occurrence data pack. Several tags can be checked in one '
+            'call: pass them as "queries" (preferred) or as a comma-separated '
+            '"query" — in search/translate mode each term is looked up '
+            'separately and matches carry their "query"; in suggest mode the '
+            'terms are the existing tags to extrapolate from. Requirements: '
+            '"query" or "queries" is required; "limit" 1-30 per term '
+            '(default 10). Results are '
             'evidence for verifying canonical spellings, aliases and category. '
             'For a named character, use this after researching its identity '
             'and before inspecting gallery tags. Do not guess canonical tags '
@@ -63,8 +68,17 @@ class TagToolbox {
             'query': {
               'type': 'string',
               'description':
-                  'Search term. For suggest mode: comma-separated '
-                  'existing tags.',
+                  'Single search term, or a comma-separated list of terms. '
+                  'In suggest mode: the existing tags to extrapolate from.',
+            },
+            'queries': {
+              'type': 'array',
+              'items': {'type': 'string', 'maxLength': 200},
+              'minItems': 1,
+              'maxItems': 12,
+              'description':
+                  'Preferred way to look up several tags in one call. Each '
+                  'term is reported separately, matched or unmatched.',
             },
             'mode': {
               'type': 'string',
@@ -77,10 +91,9 @@ class TagToolbox {
               'type': 'integer',
               'minimum': 1,
               'maximum': 30,
-              'description': 'Max results, 1-30. Default 10.',
+              'description': 'Max results per term, 1-30. Default 10.',
             },
           },
-          'required': ['query'],
         },
         executeFn: (_, params) => _searchTags(params),
       ),
@@ -92,114 +105,148 @@ class TagToolbox {
   // -------------------------------------------------------------------------
 
   Future<AgentToolResult> _searchTags(Map<String, dynamic> args) async {
-    final query = (args['query'] as String?)?.trim() ?? '';
-    if (query.isEmpty) {
-      return _errorResult('Parameter "query" is required.');
+    final queries = _collectQueries(args);
+    if (queries.isEmpty) {
+      return _errorResult('Parameter "query" or "queries" is required.');
+    }
+    if (queries.length > _maxQueries) {
+      return _errorResult(
+        'Too many queries: ${queries.length}. Send at most $_maxQueries '
+        'terms per call.',
+      );
     }
     final mode = (args['mode'] as String?)?.trim() ?? 'auto';
-    final limit = ((args['limit'] as num?)?.toInt() ?? 10).clamp(1, 30);
-    final resolved = mode == 'auto'
-        ? (_chinesePattern.hasMatch(query) ? 'translate' : 'search')
-        : mode;
-    switch (resolved) {
-      case 'translate':
-        return _translate(query, limit);
-      case 'suggest':
-        return _suggest(query, limit);
-      case 'search':
-        return _search(query, limit);
-      default:
-        return _errorResult(
-          'Unknown mode "$mode". Use auto / search / translate / suggest.',
-        );
+    if (!_modes.contains(mode)) {
+      return _errorResult(
+        'Unknown mode "$mode". Use auto / search / translate / suggest.',
+      );
     }
+    final limit = ((args['limit'] as num?)?.toInt() ?? 10).clamp(1, 30);
+    // 共现推荐本来就是"给一组已有标签推荐"，多个词合成一次查询。
+    if (mode == 'suggest') return _suggest(queries.join(','), limit);
+
+    final multi = queries.length > 1;
+    final results = <Map<String, dynamic>>[];
+    final unmatched = <String>[];
+    var catalogMissed = false;
+    var translationMissed = false;
+    for (final query in queries) {
+      final resolved = mode == 'auto'
+          ? (_chinesePattern.hasMatch(query) ? 'translate' : 'search')
+          : mode;
+      // 单个查询失败（字典或数据包没装）对整批都成立，直接回报而不是逐条重复。
+      final List<Map<String, dynamic>> matches;
+      try {
+        matches = resolved == 'translate'
+            ? await _translationMatches(query, limit)
+            : await _catalogMatches(query, limit);
+      } catch (e) {
+        AppLogger.w('search_tags($resolved) failed: $e', 'AgentChat');
+        return _errorResult(
+          resolved == 'translate'
+              ? 'Tag translation failed: $e (the Chinese dictionary may not be '
+                    'installed)'
+              : 'Tag search failed: $e',
+        );
+      }
+      if (matches.isEmpty) {
+        unmatched.add(query);
+        if (resolved == 'translate') {
+          translationMissed = true;
+        } else {
+          catalogMissed = true;
+        }
+        continue;
+      }
+      for (final match in matches) {
+        results.add(multi ? {'query': query, ...match} : match);
+      }
+    }
+    return _textResult(
+      jsonEncode({
+        'ok': true,
+        'results': results,
+        if (unmatched.isNotEmpty) 'unmatched': unmatched,
+        if (results.isEmpty && translationMissed)
+          'note':
+              'No translation match. If Chinese input keeps returning nothing, '
+              'the Chinese dictionary may not be installed yet (download it in '
+              'Settings).',
+        if (results.isEmpty && !translationMissed && catalogMissed)
+          'note': 'No catalog match for the given term(s).',
+      }),
+    );
+  }
+
+  static const int _maxQueries = 12;
+  static const Set<String> _modes = {'auto', 'search', 'translate', 'suggest'};
+
+  /// 一次查多个 tag：`queries` 数组优先，`query` 里的逗号也当分隔符。
+  ///
+  /// danbooru 标签本身不含逗号，所以拆分不会破坏单个标签名；这样既能一次核对
+  /// 一组拼写，也不必为每个词各调一次工具。
+  List<String> _collectQueries(Map<String, dynamic> args) {
+    final raw = args['queries'];
+    final values = <String>[];
+    if (raw is List && raw.isNotEmpty) {
+      for (final item in raw) {
+        if (item is String) values.add(item);
+      }
+    } else if (args['query'] is String) {
+      values.addAll((args['query'] as String).split(','));
+    }
+    return [
+      for (final value in values)
+        if (value.trim().isNotEmpty) value.trim(),
+    ];
   }
 
   /// 内置词库模糊搜索（英文标签 + 别名，FTS5）。
-  Future<AgentToolResult> _search(String query, int limit) async {
-    try {
-      final repository = _ref.read(tagCatalogRepositoryProvider);
-      final token = query.replaceAll(' ', '_').toLowerCase();
-      final candidates = await repository.search(
-        CompletionQuery(
-          fullText: token,
-          cursorPosition: token.length,
-          token: token,
-          replacementRange: const TextReplacementRange(start: 0, end: 0),
-          existingTags: const {},
-          limit: limit,
-          locale: 'zh',
-        ),
-      );
-      if (candidates.isEmpty) {
-        return _textResult(
-          jsonEncode({
-            'ok': true,
-            'results': const <Map<String, dynamic>>[],
-            'note': 'No catalog match for "$query".',
-          }),
-        );
-      }
-      return _textResult(
-        jsonEncode({
-          'ok': true,
-          'results': [
-            for (final candidate in candidates)
-              {
-                'tag': candidate.canonicalTag,
-                'category': candidate.category.name,
-                'post_count': candidate.postCount,
-                if (candidate.aliases.isNotEmpty) 'aliases': candidate.aliases,
-                if (candidate.translation != null)
-                  'chinese': candidate.translation,
-              },
-          ],
-        }),
-      );
-    } catch (e) {
-      AppLogger.w('search_tags(search) failed: $e', 'AgentChat');
-      return _errorResult('Tag search failed: $e');
-    }
+  Future<List<Map<String, dynamic>>> _catalogMatches(
+    String query,
+    int limit,
+  ) async {
+    final repository = _ref.read(tagCatalogRepositoryProvider);
+    final token = query.replaceAll(' ', '_').toLowerCase();
+    final candidates = await repository.search(
+      CompletionQuery(
+        fullText: token,
+        cursorPosition: token.length,
+        token: token,
+        replacementRange: const TextReplacementRange(start: 0, end: 0),
+        existingTags: const {},
+        limit: limit,
+        locale: 'zh',
+      ),
+    );
+    return [
+      for (final candidate in candidates)
+        {
+          'tag': candidate.canonicalTag,
+          'category': candidate.category.name,
+          'post_count': candidate.postCount,
+          if (candidate.aliases.isNotEmpty) 'aliases': candidate.aliases,
+          if (candidate.translation != null) 'chinese': candidate.translation,
+        },
+    ];
   }
 
   /// 中文（或英文）→ danbooru 标签，依赖可选下载的 ffdkj 中文字典。
-  Future<AgentToolResult> _translate(String query, int limit) async {
-    try {
-      final dataSource = await _ref.read(translationDataSourceProvider.future);
-      final matches = await dataSource.search(query, limit: limit);
-      if (matches.isEmpty) {
-        return _textResult(
-          jsonEncode({
-            'ok': true,
-            'results': const <Map<String, dynamic>>[],
-            'note':
-                'No translation match for "$query". If Chinese input '
-                'keeps returning nothing, the Chinese dictionary may not be '
-                'installed yet (download it in Settings).',
-          }),
-        );
-      }
-      return _textResult(
-        jsonEncode({
-          'ok': true,
-          'results': [
-            for (final match in matches)
-              {
-                'tag': match.tag,
-                'chinese': match.translation,
-                'category': match.category,
-                'post_count': match.count,
-              },
-          ],
-        }),
-      );
-    } catch (e) {
-      AppLogger.w('search_tags(translate) failed: $e', 'AgentChat');
-      return _errorResult(
-        'Tag translation failed: $e (the Chinese dictionary may not be '
-        'installed)',
-      );
-    }
+  Future<List<Map<String, dynamic>>> _translationMatches(
+    String query,
+    int limit,
+  ) async {
+    final dataSource = await _ref.read(translationDataSourceProvider.future);
+    final matches = await dataSource.search(query, limit: limit);
+    return [
+      for (final match in matches)
+        {
+          'tag': match.tag,
+          'chinese': match.translation,
+          'category': match.category,
+          'post_count': match.count,
+        },
+    ];
   }
 
   /// 共现推荐：基于一个或多个已有标签推荐统计上强相关的标签。

@@ -69,10 +69,19 @@ class TagLibraryToolbox {
     name: 'list_tag_library_entries',
     label: 'List Tag Library Entries',
     description:
-        'List reusable prompt entries with stable IDs, categories, favorites, and usage metadata.',
+        'List reusable prompt entries with stable IDs, categories, favorites, '
+        'and usage metadata. "query" matches name, content or tags; "queries" '
+        'looks several terms up at once and returns entries matching any of '
+        'them. Terms are literal text, so a phrase with commas stays one term.',
     parameters: toolboxObject(
       properties: {
         'query': {'type': 'string', 'maxLength': 500},
+        'queries': {
+          'type': 'array',
+          'items': {'type': 'string', 'maxLength': 500},
+          'minItems': 1,
+          'maxItems': 12,
+        },
         'category_id': {'type': 'string'},
         'favorite_only': {'type': 'boolean'},
         'offset': {'type': 'integer', 'minimum': 0},
@@ -81,7 +90,16 @@ class TagLibraryToolbox {
     ),
     executeFn: (_, params) async {
       final state = _ref.read(tagLibraryPageNotifierProvider);
-      final query = (params['query'] as String? ?? '').trim().toLowerCase();
+      final queries = toolboxStrings(params['queries'])
+          .map((value) => value.trim().toLowerCase())
+          .where((value) => value.isNotEmpty)
+          .toList(growable: false);
+      final single = (params['query'] as String? ?? '').trim().toLowerCase();
+      final effective = queries.isNotEmpty
+          ? queries
+          : single.isEmpty
+          ? const <String>[]
+          : <String>[single];
       final categoryId = params['category_id'] as String?;
       final favoriteOnly = params['favorite_only'] as bool? ?? false;
       final offset = ((params['offset'] as num?)?.toInt() ?? 0).clamp(
@@ -89,14 +107,21 @@ class TagLibraryToolbox {
         1 << 30,
       );
       final limit = ((params['limit'] as num?)?.toInt() ?? 50).clamp(1, 200);
+      bool matchesQuery(TagLibraryEntry entry) {
+        if (effective.isEmpty) return true;
+        for (final query in effective) {
+          if (entry.name.toLowerCase().contains(query) ||
+              entry.content.toLowerCase().contains(query) ||
+              entry.tags.any((tag) => tag.toLowerCase().contains(query))) {
+            return true;
+          }
+        }
+        return false;
+      }
+
       final matching = state.entries
           .where((entry) {
-            return (query.isEmpty ||
-                    entry.name.toLowerCase().contains(query) ||
-                    entry.content.toLowerCase().contains(query) ||
-                    entry.tags.any(
-                      (tag) => tag.toLowerCase().contains(query),
-                    )) &&
+            return matchesQuery(entry) &&
                 (categoryId == null || entry.categoryId == categoryId) &&
                 (!favoriteOnly || entry.isFavorite);
           })
@@ -104,6 +129,7 @@ class TagLibraryToolbox {
       return agentToolJsonResult({
         'ok': true,
         'total': matching.length,
+        if (queries.isNotEmpty) 'queries': queries,
         'entries': [
           for (final entry in matching.skip(offset).take(limit))
             _entryJson(entry, state.categories),
@@ -387,8 +413,12 @@ class TagLibraryToolbox {
   DefinedAgentTool _deleteEntry() => toolboxIdTool(
     name: 'delete_tag_library_entry',
     label: 'Delete Tag Library Entry',
-    description: 'Permanently delete a reusable prompt entry.',
+    description:
+        'Permanently delete a reusable prompt entry. Requires confirm=true, '
+        'which may only be passed after the user agreed to the deletion in the '
+        'conversation; list or get the entry first so they know what goes away.',
     idKey: 'entry_id',
+    requiresConfirmation: true,
     execute: (id) async {
       if (_entry(id) == null) return false;
       await _ref.read(tagLibraryPageNotifierProvider.notifier).deleteEntry(id);
@@ -492,8 +522,11 @@ class TagLibraryToolbox {
     name: 'delete_tag_library_category',
     label: 'Delete Tag Library Category',
     description:
-        'Delete a category using the owning provider’s existing descendant and entry migration semantics.',
+        'Delete a category using the owning provider’s existing descendant and '
+        'entry migration semantics. Requires confirm=true, which may only be '
+        'passed after the user agreed to the deletion in the conversation.',
     idKey: 'category_id',
+    requiresConfirmation: true,
     execute: (id) async {
       if (!_ref
           .read(tagLibraryPageNotifierProvider)

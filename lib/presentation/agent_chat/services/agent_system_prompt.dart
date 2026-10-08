@@ -145,7 +145,18 @@ String buildAgentSystemPromptBody({required bool webAccessEnabled}) {
         'native alpha), optionally reinforced with the prompt tags.',
     '- search_tags looks up danbooru tags as a reference (English fuzzy '
         'search, Chinese translation, co-occurrence suggestions); newer '
-        'models also understand natural language, so use whichever fits.',
+        'models also understand natural language, so use whichever fits. Pass '
+        'several tags in one call with "queries" (or a comma-separated '
+        '"query") instead of calling it once per tag.',
+    '- The user tag library (词库) is shared, persisted workspace state: '
+        'list_tag_library_entries / get_tag_library_entry read it (both accept '
+        'several query terms at once), create_tag_library_entry and '
+        'update_tag_library_entry add or edit reusable prompt entries '
+        '(categories via list/create/update_tag_library_category), and '
+        'delete_tag_library_entry / delete_tag_library_category remove them. '
+        'Deletions are permanent and require confirm=true, which you may only '
+        'pass after the user explicitly agreed in this conversation; show what '
+        'will be deleted and never delete as a side effect of another request.',
     '- Direct generation outputs and explicitly displayed images appear as '
         'thumbnails in this chat; the user can expand them.',
     '',

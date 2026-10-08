@@ -19,6 +19,7 @@ DefinedAgentTool toolboxIdTool({
   required String description,
   required String idKey,
   required Future<bool> Function(String id) execute,
+  bool requiresConfirmation = false,
 }) => DefinedAgentTool(
   name: name,
   label: label,
@@ -26,10 +27,24 @@ DefinedAgentTool toolboxIdTool({
   parameters: toolboxObject(
     properties: {
       idKey: {'type': 'string', 'minLength': 1},
+      if (requiresConfirmation)
+        'confirm': {
+          'type': 'boolean',
+          'description':
+              'Must be true, and only after the user explicitly agreed to '
+              'this deletion in the conversation.',
+        },
     },
-    required: [idKey],
+    required: [idKey, if (requiresConfirmation) 'confirm'],
   ),
   executeFn: (_, params) async {
+    if (requiresConfirmation && params['confirm'] != true) {
+      return agentToolError(
+        'confirmation_required',
+        'Deletions are permanent: ask the user to confirm first, then call '
+            'again with confirm=true.',
+      );
+    }
     final id = params[idKey] as String;
     final changed = await execute(id);
     return changed

@@ -147,6 +147,103 @@ void main() {
       expect(container.read(tagLibraryPageNotifierProvider).entries, isEmpty);
     },
   );
+
+  group('agent library writes', () {
+    AgentTool toolOf(ProviderContainer container, String name) =>
+        TagLibraryToolbox(
+          container.read(_refProvider),
+          resourceLoader: (_) async => null,
+          thumbnailStore: _RecordingThumbnailStore(),
+        ).tools().singleWhere((tool) => tool.name == name);
+
+    test('deleting an entry needs explicit confirmation', () async {
+      final container = _container();
+      addTearDown(container.dispose);
+      await toolOf(
+        container,
+        'create_tag_library_entry',
+      ).execute('create', {'name': 'Portrait', 'content': '1girl, solo'});
+      final id = container
+          .read(tagLibraryPageNotifierProvider)
+          .entries
+          .single
+          .id;
+      final delete = toolOf(container, 'delete_tag_library_entry');
+
+      final refused = await delete.execute('delete', {'entry_id': id});
+      expect(refused.isError, isTrue);
+      expect(refused.details['code'], 'confirmation_required');
+      expect(
+        container.read(tagLibraryPageNotifierProvider).entries,
+        hasLength(1),
+      );
+
+      final confirmed = await delete.execute('delete', {
+        'entry_id': id,
+        'confirm': true,
+      });
+      expect(confirmed.isError, isFalse);
+      expect(container.read(tagLibraryPageNotifierProvider).entries, isEmpty);
+    });
+
+    test('deleting a category needs explicit confirmation', () async {
+      final container = _container();
+      addTearDown(container.dispose);
+      await toolOf(
+        container,
+        'create_tag_library_category',
+      ).execute('create', {'name': 'Scenes'});
+      final id = container
+          .read(tagLibraryPageNotifierProvider)
+          .categories
+          .single
+          .id;
+      final delete = toolOf(container, 'delete_tag_library_category');
+
+      final refused = await delete.execute('delete', {'category_id': id});
+      expect(refused.isError, isTrue);
+      expect(refused.details['code'], 'confirmation_required');
+      expect(
+        container.read(tagLibraryPageNotifierProvider).categories,
+        hasLength(1),
+      );
+
+      final confirmed = await delete.execute('delete', {
+        'category_id': id,
+        'confirm': true,
+      });
+      expect(confirmed.isError, isFalse);
+      expect(
+        container.read(tagLibraryPageNotifierProvider).categories,
+        isEmpty,
+      );
+    });
+
+    test('several query terms match entries with any of them', () async {
+      final container = _container();
+      addTearDown(container.dispose);
+      final create = toolOf(container, 'create_tag_library_entry');
+      await create.execute('first', {
+        'name': 'Portrait',
+        'content': '1girl, solo',
+      });
+      await create.execute('second', {
+        'name': 'Scenery',
+        'content': 'no humans, landscape',
+      });
+      final list = toolOf(container, 'list_tag_library_entries');
+
+      final multi = await list.execute('multi', {
+        'queries': ['portrait', 'landscape'],
+      });
+      expect(multi.details['total'], 2);
+      expect(multi.details['queries'], ['portrait', 'landscape']);
+
+      final single = await list.execute('single', {'query': 'portrait'});
+      expect(single.details['total'], 1);
+      expect(single.details.containsKey('queries'), isFalse);
+    });
+  });
 }
 
 ProviderContainer _container({LocalStorageService? storage}) =>
