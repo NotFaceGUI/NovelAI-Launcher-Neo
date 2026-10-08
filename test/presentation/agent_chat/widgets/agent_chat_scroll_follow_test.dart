@@ -518,6 +518,321 @@ void main() {
     },
   );
 
+  testWidgets(
+    'wheel scrolling while streaming keeps the user offset instead of fighting it',
+    (tester) async {
+      final controller = AgentChatPanelController();
+      addTearDown(controller.dispose);
+      final turns = List.generate(
+        6,
+        (index) => AgentChatTurnModel(
+          ordinal: index,
+          userMessage: UserMessage.text('turn $index'),
+          userMessageIndex: index,
+        ),
+      );
+
+      Future<void> pumpViewport(double liveHeight) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                height: 300,
+                child: AgentChatThreadViewport(
+                  sessionId: 'a',
+                  turns: turns,
+                  controller: controller,
+                  horizontalPadding: 0,
+                  maxWidth: 600,
+                  compactLayout: true,
+                  hasEarlier: false,
+                  historyLoading: false,
+                  prependAnchorEntryId: null,
+                  geometryRevision: liveHeight,
+                  onLoadEarlier: null,
+                  live: SizedBox(height: liveHeight),
+                  turnBuilder: (context, turn, current) => SizedBox(
+                    height: 100,
+                    child: Text('turn ${turn.ordinal}'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      await pumpViewport(80);
+      await tester.pump();
+      final transcript = find.byType(CustomScrollView);
+      await tester.drag(transcript, const Offset(0, 240));
+      await tester.pumpAndSettle();
+      final pausedOffset = controller.scrollController.offset;
+      expect(controller.showJumpToLatest, isTrue);
+
+      final anchor = find.byKey(const ValueKey('agent-turn-3'));
+      final anchorTop = tester.getTopLeft(anchor).dy;
+
+      // 滚轮滚一次，同一帧里流式内容又长高：漂移补偿不能把用户刚滚出来的位置
+      // 顶回去，否则连续滚动时视图会来回抽搐。
+      final pointer = TestPointer(1, PointerDeviceKind.mouse);
+      pointer.hover(tester.getCenter(transcript));
+      await tester.sendEventToBinding(pointer.scroll(const Offset(0, -60)));
+      final wheelOffset = controller.scrollController.offset;
+      expect(wheelOffset, greaterThan(pausedOffset));
+
+      await pumpViewport(200);
+      await tester.pump();
+
+      expect(
+        controller.scrollController.offset,
+        greaterThanOrEqualTo(wheelOffset - 0.01),
+        reason: '用户滚出来的位置不该被补偿顶回去（补偿只允许叠加在它之上）',
+      );
+      expect(
+        tester.getTopLeft(anchor).dy,
+        isNot(closeTo(anchorTop, 0.01)),
+        reason: '滚轮必须真的把内容滚出可见位移，而不是被补偿吸收',
+      );
+
+      // 之后不再滚动：漂移补偿恢复，锚点继续被稳定住。
+      final settledTop = tester.getTopLeft(anchor).dy;
+      await pumpViewport(320);
+      await tester.pump();
+      expect(tester.getTopLeft(anchor).dy, closeTo(settledTop, 0.01));
+      expect(controller.showJumpToLatest, isTrue);
+    },
+  );
+
+  testWidgets(
+    'bursty streaming keeps the paused transcript painted at the same place',
+    (tester) async {
+      final controller = AgentChatPanelController();
+      addTearDown(controller.dispose);
+      final turns = List.generate(
+        6,
+        (index) => AgentChatTurnModel(
+          ordinal: index,
+          userMessage: UserMessage.text('turn $index'),
+          userMessageIndex: index,
+        ),
+      );
+      // 吐字是突发的：有的帧不动，有的帧一次长高一大截。
+      var liveHeight = 4000.0;
+
+      Future<void> pumpFrame() async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                height: 300,
+                child: AgentChatThreadViewport(
+                  sessionId: 'a',
+                  turns: turns,
+                  controller: controller,
+                  horizontalPadding: 0,
+                  maxWidth: 600,
+                  compactLayout: true,
+                  hasEarlier: false,
+                  historyLoading: false,
+                  prependAnchorEntryId: null,
+                  geometryRevision: liveHeight,
+                  onLoadEarlier: null,
+                  live: SizedBox(height: liveHeight),
+                  turnBuilder: (context, turn, current) => SizedBox(
+                    height: 120,
+                    child: Text('turn ${turn.ordinal}'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      await pumpFrame();
+      controller.pauseFollowingLatest();
+      controller.jumpToPreservingFollow(4300);
+      await tester.pump();
+
+      // 锚点这一帧真正被画在哪 = 布局用的 scrollOffset 与它滚动坐标之差。
+      // 帧末再测位置看不出问题：补偿晚一拍时，每来一批 token 画面会先画偏再被
+      // 拉回，读帧末状态永远是对的。
+      double paintedPositionOfAnchor() {
+        RenderObject node = tester.renderObject(
+          find.byKey(const ValueKey('agent-turn-3')),
+        );
+        while (node.parent is! RenderSliver) {
+          node = node.parent!;
+        }
+        final parentData = node.parentData! as SliverMultiBoxAdaptorParentData;
+        final sliver = node.parent! as RenderSliver;
+        return parentData.layoutOffset! - sliver.constraints.scrollOffset;
+      }
+
+      final painted = paintedPositionOfAnchor();
+      var expectedOffset = controller.scrollController.offset;
+      for (final burst in const [0.0, 120.0, 0.0, 160.0, 0.0, 40.0]) {
+        liveHeight += burst;
+        await pumpFrame();
+        expectedOffset += burst;
+        expect(
+          paintedPositionOfAnchor(),
+          closeTo(painted, 0.01),
+          reason: '吐字 $burst 的那一帧画面被画偏了',
+        );
+        expect(
+          controller.scrollController.offset,
+          closeTo(expectedOffset, 0.01),
+          reason: '暂停视口应随内容长高同步补偿，保持同一段内容在屏幕上不动',
+        );
+      }
+      expect(controller.showJumpToLatest, isTrue);
+    },
+  );
+
+  testWidgets(
+    'a single streaming turn stays put while the reader is paused inside it',
+    (tester) async {
+      final controller = AgentChatPanelController();
+      addTearDown(controller.dispose);
+      // 新会话只有一条回合，没有历史锚点：这时要靠当前回合自己的顶边当参考。
+      var turnHeight = 900.0;
+      final turns = [
+        AgentChatTurnModel(
+          ordinal: 0,
+          userMessage: UserMessage.text('turn 0'),
+          userMessageIndex: 0,
+        ),
+      ];
+
+      Future<void> pumpFrame() async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                height: 300,
+                child: AgentChatThreadViewport(
+                  sessionId: 'a',
+                  turns: turns,
+                  controller: controller,
+                  horizontalPadding: 0,
+                  maxWidth: 600,
+                  compactLayout: true,
+                  hasEarlier: false,
+                  historyLoading: false,
+                  prependAnchorEntryId: null,
+                  geometryRevision: turnHeight,
+                  onLoadEarlier: null,
+                  live: const SizedBox.shrink(),
+                  turnBuilder: (context, turn, current) => SizedBox(
+                    height: turnHeight,
+                    child: Text('turn ${turn.ordinal}'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      await pumpFrame();
+      controller.pauseFollowingLatest();
+      controller.jumpToPreservingFollow(300);
+      await tester.pump();
+
+      double paintedTopEdge() {
+        RenderObject node = tester.renderObject(
+          find.byKey(const ValueKey('agent-turn-0')),
+        );
+        while (node.parent is! RenderSliver) {
+          node = node.parent!;
+        }
+        final parentData = node.parentData! as SliverMultiBoxAdaptorParentData;
+        final sliver = node.parent! as RenderSliver;
+        final box = node as RenderBox;
+        return parentData.layoutOffset! +
+            box.size.height -
+            sliver.constraints.scrollOffset;
+      }
+
+      final painted = paintedTopEdge();
+      var expectedOffset = controller.scrollController.offset;
+      for (final burst in const [0.0, 120.0, 0.0, 160.0, 0.0, 40.0]) {
+        turnHeight += burst;
+        await pumpFrame();
+        expectedOffset += burst;
+        expect(
+          paintedTopEdge(),
+          closeTo(painted, 0.01),
+          reason: '单回合吐字 $burst 的那一帧画面被画偏了',
+        );
+        expect(
+          controller.scrollController.offset,
+          closeTo(expectedOffset, 0.01),
+        );
+      }
+      expect(controller.showJumpToLatest, isTrue);
+    },
+  );
+
+  testWidgets('the scroll extent stays fixed while scrolling static content', (
+    tester,
+  ) async {
+    final controller = AgentChatPanelController();
+    addTearDown(controller.dispose);
+    final turns = List.generate(
+      6,
+      (index) => AgentChatTurnModel(
+        ordinal: index,
+        userMessage: UserMessage.text('turn $index'),
+        userMessageIndex: index,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 300,
+            child: AgentChatThreadViewport(
+              sessionId: 'a',
+              turns: turns,
+              controller: controller,
+              horizontalPadding: 0,
+              maxWidth: 600,
+              compactLayout: true,
+              hasEarlier: false,
+              historyLoading: false,
+              prependAnchorEntryId: null,
+              geometryRevision: 0,
+              onLoadEarlier: null,
+              // 一个巨大的实时卡片配上小回合：默认的按窗口平均外推会把总高度
+              // 估成真实值的好几倍，滚动时随窗口进出反复变化。
+              live: const SizedBox(height: 4000),
+              turnBuilder: (context, turn, current) =>
+                  SizedBox(height: 120, child: Text('turn ${turn.ordinal}')),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final position = controller.scrollController.position;
+    final extent = position.maxScrollExtent;
+    expect(extent, lessThan(6000));
+    for (final offset in const [0.0, 600.0, 2000.0, 3000.0, 4200.0]) {
+      controller.jumpToPreservingFollow(offset);
+      await tester.pump();
+      expect(
+        position.maxScrollExtent,
+        closeTo(extent, 0.01),
+        reason: 'offset $offset 处滚动范围不该变化（滚动条高度会跟着跳）',
+      );
+    }
+  });
+
   testWidgets('returning to the bottom or sending resumes streaming follow', (
     tester,
   ) async {
