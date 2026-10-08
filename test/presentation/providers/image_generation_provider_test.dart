@@ -1713,6 +1713,86 @@ void main() {
         ),
       ).called(1);
     });
+
+    test(
+      'prompt variations should drive one request per prompt in one run',
+      () async {
+        final mockApiService = MockNAIImageGenerationApiService();
+        final requestedPrompts = <String>[];
+        final requestedSampleCounts = <int>[];
+
+        when(
+          () => mockApiService.generateImage(
+            any(),
+            onProgress: any(named: 'onProgress'),
+            focusedInpaintEnabled: any(named: 'focusedInpaintEnabled'),
+            minimumContextMegaPixels: any(named: 'minimumContextMegaPixels'),
+            focusedSelectionRect: any(named: 'focusedSelectionRect'),
+          ),
+        ).thenAnswer((_) async => fail('prompt variations use the stream'));
+        when(
+          () => mockApiService.generateImageStream(
+            any(),
+            focusedInpaintEnabled: any(named: 'focusedInpaintEnabled'),
+            minimumContextMegaPixels: any(named: 'minimumContextMegaPixels'),
+            focusedSelectionRect: any(named: 'focusedSelectionRect'),
+          ),
+        ).thenAnswer((invocation) {
+          final params = invocation.positionalArguments.first as ImageParams;
+          requestedPrompts.add(params.prompt);
+          requestedSampleCounts.add(params.nSamples);
+          return Stream<ImageStreamChunk>.fromIterable([
+            ImageStreamChunk.complete(
+              _validImageBytes(width: 640, height: 960),
+              sampleIndex: 0,
+            ),
+          ]);
+        });
+
+        container.dispose();
+        container = _createAuthenticatedContainer(
+          overrides: [
+            naiImageGenerationApiServiceProvider.overrideWithValue(
+              mockApiService,
+            ),
+            subscriptionNotifierProvider.overrideWith(
+              TestSubscriptionNotifier.new,
+            ),
+          ],
+        );
+        await container
+            .read(notificationSettingsNotifierProvider.notifier)
+            .setSoundEnabled(false);
+        await container
+            .read(imageSaveSettingsNotifierProvider.notifier)
+            .setAutoSave(false);
+        container.read(imagesPerRequestProvider.notifier).set(3);
+
+        const variations = [
+          '1girl, standing',
+          '1girl, sitting',
+          '1girl, jumping',
+        ];
+        await container
+            .read(imageGenerationNotifierProvider.notifier)
+            .generate(
+              container
+                  .read(generationParamsNotifierProvider)
+                  .copyWith(
+                    prompt: variations.first,
+                    nSamples: variations.length,
+                  ),
+              batchSizeOverride: 1,
+              promptVariations: variations,
+            );
+
+        final state = container.read(imageGenerationNotifierProvider);
+        expect(requestedPrompts, variations);
+        expect(requestedSampleCounts, [1, 1, 1]);
+        expect(state.status, GenerationStatus.completed);
+        expect(state.currentImages, hasLength(variations.length));
+      },
+    );
   });
 }
 

@@ -65,15 +65,20 @@ String buildAgentSystemPromptBody({required bool webAccessEnabled}) {
     '- generate_image is the DEFAULT and is SYNCHRONOUS: it waits, then '
         'shows the images in the chat. Its "count" generates N '
         'variations of the SAME prompt (max '
-        '${GenerationToolbox.maxGenerateCount}); for several DIFFERENT '
-        'prompts, call it once per prompt. source_image / mask_image '
+        '${GenerationToolbox.maxGenerateCount}); "prompts" instead takes up '
+        'to ${GenerationToolbox.maxGenerateCount} complete different prompts '
+        'and draws one image per entry in a single run, which is how several '
+        'poses or subjects end up together in one canvas. Provide exactly one '
+        'of prompt / prompts, and never combine prompts with count. '
+        'source_image / mask_image '
         'switch to img2img / inpaint. This compatibility tool follows the '
         'same two-call preparation_id contract, with confirmed=true only '
         'required for a paid preparation.',
     '- queue_image_task is ASYNC: it enqueues N IDENTICAL tasks (same '
         'prompt) and returns immediately with no images in the chat. '
         'Only use it when the user explicitly asks to queue / background '
-        'batch. For DIFFERENT prompts, call it once per prompt. This '
+        'batch. It has no prompts list; for DIFFERENT prompts use '
+        'generate_image with "prompts". This '
         'compatibility tool likewise submits its preparation in a second '
         'call; do not request confirmation for an exact zero-cost estimate.',
     '- get_generation_status reports generation progress and queue stats.',

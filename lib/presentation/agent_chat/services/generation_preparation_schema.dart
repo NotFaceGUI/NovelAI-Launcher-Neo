@@ -1,4 +1,5 @@
 import '../../../core/constants/model_capabilities.dart';
+import 'generation_tool_limits.dart';
 
 Map<String, dynamic> generationPreparationProperties({
   required bool includeOperation,
@@ -9,6 +10,18 @@ Map<String, dynamic> generationPreparationProperties({
       'enum': ['generate', 'queue'],
     },
   'prompt': {'type': 'string'},
+  'prompts': {
+    'type': 'array',
+    'items': {'type': 'string'},
+    'maxItems': generationToolMaxGenerateCount,
+    'description':
+        'Multi-prompt mode (generate only): one complete positive prompt per '
+        'image, so a single transaction produces different poses or subjects '
+        'in one run. Every entry generates exactly one image; count and the '
+        'app "images per request" setting do not multiply it. Mutually '
+        'exclusive with prompt and count. negative_prompt, width, height, '
+        'seed, source image and characters stay shared by every entry.',
+  },
   'negative_prompt': {'type': 'string'},
   'width': {'type': 'integer'},
   'height': {'type': 'integer'},

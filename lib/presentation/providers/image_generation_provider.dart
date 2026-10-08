@@ -271,11 +271,15 @@ class ImageGenerationNotifier extends _$ImageGenerationNotifier {
   Future<void> waitUntilGenerationInvocationSettled() =>
       _generationInvocationSettled?.future ?? Future<void>.value();
 
+  /// [promptVariations] 是每批一张的提示词序列（agent 多提示词模式），
+  /// 长度必须等于 `params.nSamples`，即批次数；为空时所有批次共用
+  /// `params.prompt`。
   Future<void> generate(
     ImageParams params, {
     int? batchSizeOverride,
     bool preserveCharacterSnapshot = false,
     GenerationFocusedSnapshot? focusedOverride,
+    List<String>? promptVariations,
   }) async {
     if (_isDisposed || state.isBusy) {
       return;
@@ -387,9 +391,18 @@ class ImageGenerationNotifier extends _$ImageGenerationNotifier {
         batchCount: prepared.params.nSamples,
         batchSize: batchSizeOverride ?? ref.read(imagesPerRequestProvider),
         prepareBatch: (batch, current) async {
-          if (batch == 0) return current;
-          final next = await preparation.prepareSubsequentBatch(current);
-          return next;
+          final base = batch == 0
+              ? current
+              : await preparation.prepareSubsequentBatch(current);
+          final variation =
+              promptVariations != null &&
+                  batch > 0 &&
+                  batch < promptVariations.length
+              ? promptVariations[batch]
+              : null;
+          return variation == null
+              ? base
+              : await preparation.preparePromptVariation(base, variation);
         },
         focusedInpaintEnabled: prepared.focusedSnapshot.enabled,
         minimumContextMegaPixels:

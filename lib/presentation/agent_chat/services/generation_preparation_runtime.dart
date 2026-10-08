@@ -48,6 +48,7 @@ class GenerationPreparation {
     'auto_start': autoStart,
     'parameters': {
       'prompt': params.prompt,
+      if (arguments['prompts'] case final List prompts) 'prompts': prompts,
       'negative_prompt': params.negativePrompt,
       'model': params.model,
       'width': params.width,

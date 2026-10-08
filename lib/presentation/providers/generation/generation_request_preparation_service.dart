@@ -170,6 +170,33 @@ class GenerationRequestPreparationService {
     );
   }
 
+  /// 多提示词模式（agent `prompts`）：把某个批次的替换提示词套用与
+  /// [prepareInitial] 相同的提示词链路（别名、角色块、固定标签、预设）。
+  ///
+  /// 负向提示词等其余字段沿用已经准备过的快照，不重复解析预设内容。
+  Future<ImageParams> preparePromptVariation(
+    ImageParams currentParams,
+    String prompt,
+  ) async {
+    final promptPreparation = dependencies.prompt;
+    final resolvedPrompt = CharacterPromptBlockParser.parse(
+      PromptEditDocument.effectiveText(
+        promptPreparation.resolveAliases(prompt),
+      ),
+    ).positivePrompt;
+    final preparedPrompt = promptPreparation
+        .resolvePresets(
+          currentParams.copyWith(
+            prompt: promptPreparation.applyFixedPositiveTags(resolvedPrompt),
+            negativePrompt: '',
+          ),
+        )
+        .prompt;
+    return effectivePromptParams(
+      currentParams.copyWith(prompt: preparedPrompt),
+    );
+  }
+
   Future<ImageParams> prepareSubsequentBatch(ImageParams currentParams) async {
     final promptPreparation = dependencies.prompt;
     if (!promptPreparation.randomModeActive) {

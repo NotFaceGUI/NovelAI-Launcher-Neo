@@ -301,6 +301,165 @@ void main() {
     );
   });
 
+  test('generate_image declares the multi-prompt mode', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final generate = GenerationToolbox(
+      _makeRef(container),
+    ).tools().firstWhere((tool) => tool.name == 'generate_image');
+    final properties = generate.parameters['properties'] as Map;
+    expect(generate.parameters['required'], isEmpty);
+    final prompts = properties['prompts'] as Map;
+    expect(prompts, containsPair('type', 'array'));
+    expect(prompts['items'], containsPair('type', 'string'));
+    expect(
+      prompts,
+      containsPair('maxItems', GenerationToolbox.maxGenerateCount),
+    );
+
+    final queue = GenerationToolbox(
+      _makeRef(container),
+    ).tools().firstWhere((tool) => tool.name == 'queue_image_task');
+    expect(
+      (queue.parameters['properties'] as Map).containsKey('prompts'),
+      isFalse,
+    );
+  });
+
+  test(
+    'generate_image prepares one image per prompts entry in a single run',
+    () async {
+      final fake = _FakeImageGenerationNotifier();
+      final container = ProviderContainer(
+        overrides: [
+          imageGenerationNotifierProvider.overrideWith(() => fake),
+          imagesPerRequestProvider.overrideWith(_TestImagesPerRequest.new),
+          generationParamsNotifierProvider.overrideWith(
+            _TestGenerationParamsNotifier.new,
+          ),
+          characterPromptNotifierProvider.overrideWith(
+            _TestCharacterPromptNotifier.new,
+          ),
+          subscriptionNotifierProvider.overrideWith(
+            _TestSubscriptionNotifier.new,
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final tool = GenerationToolbox(
+        _makeRef(container),
+      ).tools().firstWhere((candidate) => candidate.name == 'generate_image');
+      const variations = [
+        '1girl, standing',
+        '1girl, sitting',
+        '1girl, jumping',
+      ];
+
+      final prepared = _json(
+        await tool.execute('prompts-prepare', {'prompts': variations}),
+      );
+      final parameters = prepared['parameters'] as Map<String, dynamic>;
+      final params = container.read(generationParamsNotifierProvider);
+
+      expect(prepared['count'], variations.length);
+      expect(prepared['batch_size'], 1);
+      expect(prepared['parameters']['prompt'], variations.first);
+      expect(parameters['prompts'], variations);
+      expect(
+        prepared['estimated_anlas'],
+        AnlasCalculator.calculateRequestCost(
+          width: params.width,
+          height: params.height,
+          steps: params.steps,
+          batchCount: variations.length,
+          batchSize: 1,
+          smea: params.effectiveSmea,
+          smeaDyn: params.effectiveSmeaDyn,
+          model: params.model,
+          subscriptionTier: 0,
+        ),
+      );
+      expect(prepared['confirmation_required'], isTrue);
+      expect(fake.generateCalls, 0);
+
+      final submitted = await tool.execute('prompts-submit', {
+        'preparation_id': prepared['preparation_id'],
+        'confirmed': true,
+      });
+      expect(submitted.isError, isFalse);
+      expect(fake.generateCalls, 1);
+      expect(fake.params!.prompt, variations.first);
+      expect(fake.params!.nSamples, variations.length);
+      expect(fake.batchSize, 1);
+      expect(fake.promptVariations, variations);
+    },
+  );
+
+  test('generate_image rejects conflicting or malformed prompts', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final tool = GenerationToolbox(
+      _makeRef(container),
+    ).tools().firstWhere((candidate) => candidate.name == 'generate_image');
+
+    Future<String> failure(Map<String, dynamic> args) async {
+      final result = await tool.execute('prompts-invalid', args);
+      expect(result.isError, isTrue);
+      return _json(result)['message'] as String;
+    }
+
+    expect(
+      await failure({
+        'prompt': '1girl',
+        'prompts': ['1girl, sitting'],
+      }),
+      contains('exactly one of "prompt" or "prompts"'),
+    );
+    expect(
+      await failure({
+        'prompts': ['1girl, standing'],
+        'count': 2,
+      }),
+      contains('cannot be combined with "prompts"'),
+    );
+    expect(
+      await failure({
+        'prompts': ['1girl, standing', '  '],
+      }),
+      contains('prompts[1]'),
+    );
+    expect(
+      await failure({
+        'prompts': List<String>.filled(
+          GenerationToolbox.maxGenerateCount + 1,
+          '1girl',
+        ),
+      }),
+      contains('between 1 and ${GenerationToolbox.maxGenerateCount}'),
+    );
+    expect(
+      await failure({'prompts': '1girl, standing'}),
+      contains('must be an array of strings'),
+    );
+  });
+
+  test('queue_image_task rejects the multi-prompt mode', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final tool = GenerationToolbox(
+      _makeRef(container),
+    ).tools().firstWhere((candidate) => candidate.name == 'queue_image_task');
+    final result = await tool.execute('queue-prompts', {
+      'prompts': ['1girl, standing', '1girl, sitting'],
+    });
+
+    expect(result.isError, isTrue);
+    expect(
+      result.content.whereType<ToolResultTextContent>().single.text,
+      contains('only supported for generate'),
+    );
+  });
+
   test('interrogate_image observes an already aborted signal', () async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
@@ -1234,6 +1393,7 @@ class _FakeImageGenerationNotifier extends ImageGenerationNotifier {
   int generateCalls = 0;
   int? batchSize;
   ImageParams? params;
+  List<String>? promptVariations;
   bool? preserveCharacterSnapshot;
 
   @override
@@ -1245,10 +1405,12 @@ class _FakeImageGenerationNotifier extends ImageGenerationNotifier {
     int? batchSizeOverride,
     bool preserveCharacterSnapshot = false,
     GenerationFocusedSnapshot? focusedOverride,
+    List<String>? promptVariations,
   }) async {
     generateCalls++;
     batchSize = batchSizeOverride;
     this.params = params;
+    this.promptVariations = promptVariations;
     this.preserveCharacterSnapshot = preserveCharacterSnapshot;
     state = ImageGenerationState(
       status: GenerationStatus.completed,

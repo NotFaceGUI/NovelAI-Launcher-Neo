@@ -21,6 +21,7 @@ import 'defined_agent_tool.dart';
 import 'generation_anlas_estimator.dart';
 import 'generation_character_orchestration.dart';
 import 'generation_preparation_runtime.dart';
+import 'generation_prompt_variations.dart';
 import 'generation_workspace_path_resolver.dart';
 
 class GenerationPreparationService {
@@ -117,11 +118,15 @@ class GenerationPreparationService {
     ImageParams? baseOverride,
     ImageParams? characterSnapshotOverride,
   }) async {
+    final promptVariations = _parsePromptVariations(kind, args);
+    if (promptVariations.error != null) return promptVariations.error!;
+    final prompts = promptVariations.prompts;
     final prompt = (args['prompt'] as String?)?.trim() ?? '';
-    if (prompt.isEmpty) {
+    if (prompts == null && prompt.isEmpty) {
       return agentToolError(
         'invalid_prompt',
-        'Parameter "prompt" is required.',
+        'Parameter "prompt" is required, or "prompts" for several different '
+            'prompts in one call.',
       );
     }
     final maximum = kind == GenerationPreparationKind.generate
@@ -159,7 +164,7 @@ class GenerationPreparationService {
       );
     }
 
-    final promptParts = <String>[prompt];
+    final promptParts = <String>[prompts?.first ?? prompt];
     final negativePromptParts = <String>[
       (args['negative_prompt'] as String?)?.trim() ?? base.negativePrompt,
     ];
@@ -368,7 +373,9 @@ class GenerationPreparationService {
       width: width,
       height: height,
       seed: (args['seed'] as num?)?.toInt() ?? -1,
-      nSamples: kind == GenerationPreparationKind.generate ? count : 1,
+      nSamples: kind == GenerationPreparationKind.generate
+          ? (prompts?.length ?? count)
+          : 1,
       action: action,
       sourceImage: sourceBytes,
       maskImage: maskBytes,
@@ -380,7 +387,9 @@ class GenerationPreparationService {
       characters: characters,
       useCoords: useCoords,
     );
-    final batchSize = _anlasEstimator.currentBatchSize;
+    // 多提示词模式每条提示词只出一张图：批次大小固定为 1，总图数等于条目数，
+    // 不随“每次请求图片数”设置翻倍。
+    final batchSize = prompts != null ? 1 : _anlasEstimator.currentBatchSize;
     final estimate = _anlasEstimator.estimate(
       params,
       requestCount: kind == GenerationPreparationKind.queue ? count : 1,
@@ -402,7 +411,7 @@ class GenerationPreparationService {
         baseParams: base,
         params: params,
         batchSize: batchSize,
-        count: count,
+        count: prompts?.length ?? count,
         autoStart: args['auto_start'] as bool? ?? true,
         estimatedAnlas: estimate,
         arguments: canonicalArgs,
@@ -411,6 +420,55 @@ class GenerationPreparationService {
       ),
     );
     return agentToolJsonResult(preparation.toJson());
+  }
+
+  /// 多提示词模式的准备期校验：`prompts` 与 `prompt` / `count` 互斥，
+  /// 且只对 generate 生效。
+  ({List<String>? prompts, AgentToolResult? error}) _parsePromptVariations(
+    GenerationPreparationKind kind,
+    Map<String, dynamic> args,
+  ) {
+    if (args['prompts'] == null) return (prompts: null, error: null);
+    if ((args['prompt'] as String?)?.trim().isNotEmpty ?? false) {
+      return (
+        prompts: null,
+        error: agentToolError(
+          'conflicting_prompt_arguments',
+          'Provide exactly one of "prompt" or "prompts".',
+        ),
+      );
+    }
+    if (args['count'] != null) {
+      return (
+        prompts: null,
+        error: agentToolError(
+          'conflicting_prompt_arguments',
+          'Parameter "count" cannot be combined with "prompts"; every entry '
+              'already generates exactly one image.',
+        ),
+      );
+    }
+    if (kind != GenerationPreparationKind.generate) {
+      return (
+        prompts: null,
+        error: agentToolError(
+          'unsupported_prompts',
+          'Parameter "prompts" is only supported for generate; queue tasks '
+              'take a single prompt.',
+        ),
+      );
+    }
+    final parsed = parsePromptVariations(
+      args['prompts'],
+      maximum: _maxGenerateCount,
+    );
+    if (parsed.error != null) {
+      return (
+        prompts: null,
+        error: agentToolError('invalid_prompts', parsed.error!),
+      );
+    }
+    return (prompts: parsed.prompts, error: null);
   }
 
   Future<AgentToolResult?> _appendTextReferences(
@@ -491,6 +549,15 @@ class GenerationPreparationService {
     final merged = Map<String, dynamic>.from(current.arguments);
     for (final entry in args.entries) {
       if (entry.key != 'preparation_id') merged[entry.key] = entry.value;
+    }
+    // prompt / prompts / count 是互斥的提示词模式：切换模式时必须丢掉上一种
+    // 模式的字段，否则旧字段会被判为冲突参数。
+    if (args['prompts'] != null) {
+      merged
+        ..remove('prompt')
+        ..remove('count');
+    } else if ((args['prompt'] as String?)?.trim().isNotEmpty ?? false) {
+      merged.remove('prompts');
     }
     final result = await prepareForKind(
       current.kind,

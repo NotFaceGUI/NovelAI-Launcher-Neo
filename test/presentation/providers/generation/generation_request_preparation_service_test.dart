@@ -115,4 +115,78 @@ void main() {
       expect(result.params.prompt, isNot(contains('glasses')));
     },
   );
+
+  test(
+    'prompt variations reuse the initial prompt pipeline per entry',
+    () async {
+      final resolvedAliases = <String>[];
+      final presetNegativeInputs = <String>[];
+      final service = GenerationRequestPreparationService(
+        GenerationPreparationDependencies(
+          prompt: GenerationPromptPreparation(
+            randomModeEnabled: false,
+            queueExecuting: false,
+            generateAndApplyRandomPrompt: (_) async => '',
+            resolveAliases: (prompt) {
+              resolvedAliases.add(prompt);
+              return prompt.replaceAll('<alice>', 'girl, blue eyes');
+            },
+            applyFixedPositiveTags: (prompt) => '$prompt, {{{masterpiece}}}',
+            applyFixedNegativeTags: (prompt) => prompt,
+            fixedTagUsageSnapshot: const FixedTagUsageSnapshot(),
+            resolvePresets: (params) {
+              presetNegativeInputs.add(params.negativePrompt);
+              return PromptPresetResolution(
+                prompt: 'quality, ${params.prompt}',
+                negativePrompt: params.negativePrompt.isEmpty
+                    ? ''
+                    : 'preset-uc, ${params.negativePrompt}',
+                qualityToggle: params.qualityToggle,
+                ucPreset: params.ucPreset,
+                omitQualityTagHint: params.omitQualityTagHint,
+                omitUcPresetTagHint: params.omitUcPresetTagHint,
+              );
+            },
+          ),
+          characters: GenerationCharacterPreparation(
+            read: (_) => const CharacterPreparationSnapshot(
+              characters: [],
+              useCoords: false,
+            ),
+          ),
+          vibes: GenerationVibePreparation(prepare: (params) async => params),
+          focused: GenerationFocusedPreparation(
+            read: () => const GenerationFocusedSnapshot(
+              enabled: false,
+              minimumContextMegaPixels: 0,
+            ),
+          ),
+        ),
+      );
+
+      const current = ImageParams(
+        prompt: '1girl, standing',
+        negativePrompt: 'preset-uc, lowres',
+        width: 832,
+        height: 1216,
+        seed: 1234,
+      );
+      final variation = await service.preparePromptVariation(
+        current,
+        '<alice>, sitting',
+      );
+
+      expect(resolvedAliases, ['<alice>, sitting']);
+      expect(presetNegativeInputs, ['']);
+      expect(
+        variation.prompt,
+        'quality, girl, blue eyes, sitting, {{{masterpiece}}}',
+      );
+      expect(variation.negativePrompt, 'preset-uc, lowres');
+      expect(variation.width, 832);
+      expect(variation.height, 1216);
+      expect(variation.seed, 1234);
+      expect(current.prompt, '1girl, standing');
+    },
+  );
 }

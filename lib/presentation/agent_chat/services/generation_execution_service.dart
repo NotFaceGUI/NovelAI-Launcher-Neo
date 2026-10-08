@@ -12,6 +12,7 @@ import '../../../data/models/image/image_params.dart';
 import '../../providers/image_generation_provider.dart';
 import 'generation_image_read_contract.dart';
 import 'generation_preparation_runtime.dart';
+import 'generation_prompt_variations.dart';
 import 'generation_tool_results.dart';
 import 'generation_workspace_path_resolver.dart';
 
@@ -35,18 +36,29 @@ class GenerationExecutionService {
     AgentToolUpdateCallback? onUpdate,
   ]) async {
     final prepared = args['_prepared_generation'] as GenerationPreparation;
-    final prompt = (args['prompt'] as String?)?.trim() ?? '';
+    // 多提示词模式：每条提示词一张图，一次调用即可产出不同姿势；总图数等于
+    // 条目数，不随“每次请求图片数”设置翻倍。
+    final variationArguments = parsePromptVariations(
+      args['prompts'],
+      maximum: _maxGenerateCount,
+    );
+    if (variationArguments.error != null) {
+      return generationErrorResult(variationArguments.error!);
+    }
+    final prompts = variationArguments.prompts;
+    final prompt = (args['prompt'] as String?)?.trim() ?? prompts?.first ?? '';
     if (prompt.isEmpty) {
       return generationErrorResult('Parameter "prompt" is required.');
     }
 
     final requestedCount = (args['count'] as num?)?.toInt() ?? 1;
-    if (requestedCount < 1 || requestedCount > _maxGenerateCount) {
+    if (prompts == null &&
+        (requestedCount < 1 || requestedCount > _maxGenerateCount)) {
       return generationErrorResult(
         'Parameter "count" must be between 1 and $_maxGenerateCount.',
       );
     }
-    final count = requestedCount;
+    final count = prompts?.length ?? requestedCount;
     final base = prepared.params;
     final requestedSeed = (args['seed'] as num?)?.toInt() ?? -1;
     final width = (args['width'] as num?)?.toInt() ?? base.width;
@@ -156,7 +168,13 @@ class GenerationExecutionService {
     }
 
     try {
-      onUpdate?.call(generationProgressResult('Generating $count image(s)...'));
+      onUpdate?.call(
+        generationProgressResult(
+          prompts == null
+              ? 'Generating $count image(s)...'
+              : 'Generating $count prompts...',
+        ),
+      );
       final params = base.copyWith(
         prompt: prompt,
         negativePrompt: negativePrompt,
@@ -184,6 +202,7 @@ class GenerationExecutionService {
             params,
             batchSizeOverride: prepared.batchSize,
             preserveCharacterSnapshot: true,
+            promptVariations: prompts,
           );
       final finished = await _waitForCompletion(
         invocation: invocation,

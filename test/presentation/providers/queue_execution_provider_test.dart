@@ -663,6 +663,7 @@ class _ControlledImageGenerationNotifier extends ImageGenerationNotifier {
     int? batchSizeOverride,
     bool preserveCharacterSnapshot = false,
     GenerationFocusedSnapshot? focusedOverride,
+    List<String>? promptVariations,
   }) async {
     if (_activeInvocation != null) return;
     final invocation = _ControlledGenerationInvocation();
@@ -750,6 +751,7 @@ class _TestImageGenerationNotifier extends ImageGenerationNotifier {
     int? batchSizeOverride,
     bool preserveCharacterSnapshot = false,
     GenerationFocusedSnapshot? focusedOverride,
+    List<String>? promptVariations,
   }) async {}
 }
 
@@ -762,6 +764,7 @@ class _CapturingImageGenerationNotifier extends _TestImageGenerationNotifier {
     int? batchSizeOverride,
     bool preserveCharacterSnapshot = false,
     GenerationFocusedSnapshot? focusedOverride,
+    List<String>? promptVariations,
   }) async {
     generated = params;
   }

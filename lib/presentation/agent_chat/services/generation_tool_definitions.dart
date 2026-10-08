@@ -156,11 +156,13 @@ class GenerationToolDefinitions {
             'SYNCHRONOUS image generation (the default): waits for the '
             'images to finish and shows them as thumbnails in the chat. '
             'Uses the current generation page settings, overriding prompt '
-            '/ negative_prompt / width / height / count / seed. '
-            'Important: "count" generates N variations of the SAME prompt '
-            '(e.g. count=3 -> three versions of one prompt). For several '
-            'DIFFERENT prompts, call this tool once per prompt instead. '
-            '"prompt" is required; write English danbooru-style tags. '
+            '/ prompts / negative_prompt / width / height / count / seed. '
+            'Provide exactly one of "prompt" or "prompts". '
+            '(1) "prompt" draws one image; "count" repeats that SAME prompt. '
+            '"prompts" draws several DIFFERENT complete prompts in one run '
+            '(e.g. four poses of one character) and is the way to get '
+            'varied results into one canvas. Write English danbooru-style '
+            'tags. '
             '(2) "count" = how many variations of the SAME prompt; minimum '
             '1, maximum $generationToolMaxGenerateCount. It maps 1:1 to the app '
             '"generation count" setting and runs on the app-native batch '
@@ -168,6 +170,15 @@ class GenerationToolDefinitions {
             'retried automatically). Total images = count x the "images '
             'per request" app setting (default 1, so count usually equals '
             'total). '
+            '(2b) "prompts" = 1 to $generationToolMaxGenerateCount complete '
+            'positive prompts, one image per entry, generated as one '
+            'sequential run whose results appear together in the chat, the '
+            'generation page and the infinite canvas. Total images = number '
+            'of entries: batch size is 1, so neither "count" nor the '
+            '"images per request" setting multiplies it. It cannot be '
+            'combined with "prompt" or "count", and negative_prompt / '
+            'width / height / seed / source_image / characters are shared '
+            'by every entry. '
             '(3) "width"/"height": prefer NAI presets — Normal portrait '
             '832x1216, landscape 1216x832, square 1024x1024; Large '
             '1024x1536 / 1536x1024 / 1472x1472; Wallpaper 1088x1920 / '
@@ -177,8 +188,9 @@ class GenerationToolDefinitions {
             'most 3145728. Omit to reuse the generation '
             'page size. '
             '(4) "seed": omit or -1 for random. A fixed seed is honored '
-            'only when count = 1; with count > 1 every image gets an '
-            'independent random seed (identical to the generation page). '
+            'only when exactly one image is generated; otherwise every '
+            'image gets an independent random seed (identical to the '
+            'generation page). '
             '(5) img2img/inpaint: provide "source_image" (local file path) '
             'to base the generation on an existing image; "strength" '
             '(0-0.99) controls how different the result may be; add '
@@ -201,13 +213,29 @@ class GenerationToolDefinitions {
           'properties': {
             'prompt': {
               'type': 'string',
-              'description': 'Positive prompt; English danbooru-style tags.',
+              'description':
+                  'Positive prompt; English danbooru-style tags. Provide '
+                  'exactly one of prompt or prompts.',
+            },
+            'prompts': {
+              'type': 'array',
+              'items': {'type': 'string'},
+              'maxItems': generationToolMaxGenerateCount,
+              'description':
+                  'Multi-prompt mode: one COMPLETE positive prompt per '
+                  'image, in generation order, each entry producing exactly '
+                  'one image (batch size 1). Use it when the user wants '
+                  'different poses, expressions or subjects in one canvas '
+                  'instead of N identical variations. Maximum '
+                  '$generationToolMaxGenerateCount entries. Cannot be combined '
+                  'with prompt or count; negative_prompt, width, height, '
+                  'seed, source_image and characters apply to every entry.',
             },
             'negative_prompt': {
               'type': 'string',
               'description':
                   'Omit to reuse the generation page negative '
-                  'prompt.',
+                  'prompt. Shared by every prompts entry.',
             },
             'width': {
               'type': 'integer',
@@ -231,8 +259,9 @@ class GenerationToolDefinitions {
               'maximum': generationToolMaxGenerateCount,
               'description':
                   'How many variations of the SAME prompt to generate '
-                  '(max $generationToolMaxGenerateCount). Default 1. For DIFFERENT '
-                  'prompts, call the tool once per prompt.',
+                  '(max $generationToolMaxGenerateCount). Default 1. Cannot be '
+                  'combined with "prompts", which generates different '
+                  'prompts instead.',
             },
             'seed': {
               'type': 'integer',
@@ -285,7 +314,7 @@ class GenerationToolDefinitions {
                   'Required only for paid preparations; exact zero-cost submissions omit this.',
             },
           },
-          'required': ['prompt'],
+          'required': <String>[],
         },
         executeWithControl: _preparation.generateLegacy,
       ),
@@ -296,9 +325,9 @@ class GenerationToolDefinitions {
             'ASYNCHRONOUS queueing: enqueues N IDENTICAL tasks (same '
             'prompt) into the generation queue and returns immediately '
             'WITHOUT producing images in the chat. "count" only creates '
-            'N copies of the SAME prompt; for DIFFERENT prompts call this '
-            'tool once per prompt (or use generate_image for synchronous '
-            'results). ONLY use this when the user explicitly asks to '
+            'N copies of the SAME prompt and there is no prompts list here; '
+            'for DIFFERENT prompts use generate_image with "prompts" '
+            'instead. ONLY use this when the user explicitly asks to '
             'add tasks to a queue / background batch; for normal image '
             'requests use generate_image instead. Requirements: "prompt" '
             'is required; "count" 1-50, capped by the queue\'s remaining '
