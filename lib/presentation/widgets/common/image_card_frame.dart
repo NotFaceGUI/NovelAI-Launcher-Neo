@@ -16,7 +16,7 @@ class ImageCardFrame extends StatelessWidget {
     this.overlays = const [],
     this.width,
     this.height,
-    this.radius = 12,
+    this.radius = defaultRadius,
     this.clipRadius,
     this.hovered = false,
     this.focused = false,
@@ -27,6 +27,10 @@ class ImageCardFrame extends StatelessWidget {
     this.hoverLift = 0,
     this.animate = true,
   });
+
+  /// 内嵌媒体（如对比视图）必须用同一个圆角，否则两者之间会露出卡片下面的
+  /// 透明背景层，在图片周围显出一圈浅色边。
+  static const double defaultRadius = 12;
 
   final Widget child;
   final Widget? information;

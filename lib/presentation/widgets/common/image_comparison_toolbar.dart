@@ -17,6 +17,20 @@ class ImageComparisonToolbar extends StatelessWidget {
     required this.canUseActualPixels,
   });
 
+  /// 生成页对比卡片的工具栏高度。
+  ///
+  /// 生成页卡片不显示缩放控件，工具栏恒为一行；调用方据此给卡片预留底部空间，
+  /// 媒体区才能保持原图宽高比。
+  static double heightFor(BuildContext context) {
+    final scaled =
+        MediaQuery.textScalerOf(context).scale(16) + _verticalPaddingBudget;
+    return scaled < _minButtonExtent ? _minButtonExtent : scaled;
+  }
+
+  /// 触控目标 44 + 上下内边距各 6。
+  static const double _minButtonExtent = 56;
+  static const double _verticalPaddingBudget = 24;
+
   final bool followMouse;
   final ValueChanged<bool> onFollowMouseChanged;
   final bool showZoom;

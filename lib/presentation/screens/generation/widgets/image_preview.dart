@@ -70,6 +70,8 @@ import '../../../utils/image_detail_opener.dart';
 import '../../../utils/krita_send_helper.dart';
 import '../../../utils/precise_ref_library_import_helper.dart';
 import '../../tag_library_page/widgets/entry_add_dialog.dart';
+import '../../../widgets/common/image_card_frame.dart';
+import '../../../widgets/common/image_comparison_toolbar.dart';
 import '../../../widgets/common/image_comparison_view.dart';
 import 'preview_info_bar.dart';
 
@@ -670,9 +672,14 @@ class _ImagePreviewWidgetState extends ConsumerState<ImagePreviewWidget> {
                 constraints.maxHeight - PreviewInfoBar.heightFor(context) - gap,
               )
             : constraints.maxHeight;
-        final cardSize = _fitAspectRatio(
+        // 开启对比后卡片里多了一条底部工具栏：先把它的高度留出来，媒体区才能
+        // 保持图片宽高比，否则图片被压短并裁切（BoxFit.cover 会裁掉上下）。
+        final cardSize = comparisonCardSize(
           aspectRatio: image.aspectRatio,
           maxSize: Size(constraints.maxWidth, availableHeight),
+          footerHeight: comparisonEnabled
+              ? ImageComparisonToolbar.heightFor(context)
+              : 0,
         );
 
         return Column(
@@ -748,6 +755,10 @@ class _ImagePreviewWidgetState extends ConsumerState<ImagePreviewWidget> {
               key: ValueKey('generation-image-comparison-${image.id}'),
               sourceImageBytes: image.comparisonSource!.bytes,
               generatedImageBytes: imageBytes,
+              // 对比必须看到完整画面：媒体区比原图短时也不能裁掉内容。
+              fit: BoxFit.contain,
+              // 与卡片外框同圆角，避免两者之间露出下层透明背景。
+              surfaceRadius: ImageCardFrame.defaultRadius,
             )
           : null,
       hoverEffectsEnabled: !comparisonEnabled,
@@ -755,9 +766,10 @@ class _ImagePreviewWidgetState extends ConsumerState<ImagePreviewWidget> {
       enableSelection: image.canBulkSelect && !comparisonEnabled,
       showSelectionOnHover: false,
       selectionMode: ref.watch(generationImageCardSelectionProvider).isActive,
-      isSelected: ref
-          .watch(generationImageCardSelectionProvider)
-          .isSelected(image.id),
+      // 对比进行中不接受选择操作，选中框也不该留在对比画面上。
+      isSelected:
+          !comparisonEnabled &&
+          ref.watch(generationImageCardSelectionProvider).isSelected(image.id),
       allowRepeatedModifierTaps: true,
       onSelectionChanged: image.canBulkSelect
           ? (selected) {
@@ -1056,7 +1068,7 @@ class _ImagePreviewWidgetState extends ConsumerState<ImagePreviewWidget> {
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final cardSize = _fitAspectRatio(
+        final cardSize = comparisonCardSize(
           aspectRatio: aspectRatio,
           maxSize: Size(constraints.maxWidth, constraints.maxHeight),
         );
@@ -1069,28 +1081,6 @@ class _ImagePreviewWidgetState extends ConsumerState<ImagePreviewWidget> {
           ),
         );
       },
-    );
-  }
-
-  Size _fitAspectRatio({required double aspectRatio, required Size maxSize}) {
-    final safeAspectRatio = aspectRatio.isFinite && aspectRatio > 0
-        ? aspectRatio
-        : 1.0;
-    final maxWidth = maxSize.width.isFinite ? max(0.0, maxSize.width) : 500.0;
-    final maxHeight = maxSize.height.isFinite
-        ? max(0.0, maxSize.height)
-        : 650.0;
-
-    var width = maxWidth;
-    var height = width / safeAspectRatio;
-    if (height > maxHeight) {
-      height = maxHeight;
-      width = height * safeAspectRatio;
-    }
-
-    return Size(
-      width.clamp(0.0, maxWidth).toDouble(),
-      height.clamp(0.0, maxHeight).toDouble(),
     );
   }
 

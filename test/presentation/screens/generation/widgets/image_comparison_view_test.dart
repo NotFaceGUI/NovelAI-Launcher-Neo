@@ -7,6 +7,8 @@ import 'package:nai_launcher/core/storage/local_storage_service.dart';
 import 'package:image/image.dart' as img;
 import 'package:nai_launcher/l10n/app_localizations.dart';
 import 'package:nai_launcher/presentation/adaptive/interaction_policy.dart';
+import 'package:nai_launcher/presentation/widgets/common/image_card_frame.dart';
+import 'package:nai_launcher/presentation/widgets/common/image_comparison_toolbar.dart';
 import 'package:nai_launcher/presentation/widgets/common/image_comparison_view.dart';
 
 void main() {
@@ -434,6 +436,88 @@ void main() {
       );
       expect(tester.takeException(), isNull);
     }
+  });
+
+  testWidgets('comparison surface follows the host card radius', (
+    tester,
+  ) async {
+    final view = ImageComparisonView(
+      sourceImageBytes: _imageBytes(red: 30),
+      generatedImageBytes: _imageBytes(red: 220),
+      surfaceRadius: ImageCardFrame.defaultRadius,
+    );
+    expect(view.surfaceRadius, 12);
+
+    // 默认独立使用时保持原来的 14。
+    expect(
+      ImageComparisonView(
+        sourceImageBytes: _imageBytes(red: 30),
+        generatedImageBytes: _imageBytes(red: 220),
+      ).surfaceRadius,
+      14,
+    );
+  });
+
+  test('comparison shows the full image by default', () {
+    final view = ImageComparisonView(
+      sourceImageBytes: _imageBytes(red: 30),
+      generatedImageBytes: _imageBytes(red: 220),
+    );
+
+    expect(view.fit, BoxFit.contain);
+  });
+
+  group('comparison card sizing', () {
+    test('keeps the image aspect ratio for the media area', () {
+      // 3:2 图片，卡片里还要放 56px 的底部工具栏。
+      final size = comparisonCardSize(
+        aspectRatio: 1.5,
+        maxSize: const Size(600, 400),
+        footerHeight: 56,
+      );
+
+      final mediaHeight = size.height - 56;
+      expect(mediaHeight, closeTo(size.width / 1.5, 0.01));
+      expect(size.height, lessThanOrEqualTo(400));
+    });
+
+    test('without a footer it just fits inside the bounds', () {
+      final size = comparisonCardSize(
+        aspectRatio: 0.5,
+        maxSize: const Size(600, 400),
+      );
+
+      expect(size.height, closeTo(400, 0.01));
+      expect(size.width, closeTo(200, 0.01));
+    });
+  });
+
+  testWidgets('comparison toolbar height follows the text scale', (
+    tester,
+  ) async {
+    final heights = <double>[];
+    for (final scale in const [1.0, 3.0]) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(scale)),
+              child: Builder(
+                builder: (scaled) {
+                  heights.add(ImageComparisonToolbar.heightFor(scaled));
+                  return const SizedBox.shrink();
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    expect(heights.first, greaterThanOrEqualTo(56));
+    expect(heights.last, greaterThan(heights.first));
   });
 }
 

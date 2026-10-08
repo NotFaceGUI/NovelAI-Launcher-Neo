@@ -14,16 +14,55 @@ import '../../adaptive/interaction_policy.dart';
 import '../../providers/image_comparison_preferences_provider.dart';
 import 'image_comparison_toolbar.dart';
 
+/// 承载对比视图的卡片尺寸。
+///
+/// [footerHeight] 是底部对比工具栏占掉的高度：卡片按"媒体区 + 工具栏"计算，
+/// 让媒体区保留原图宽高比。否则图片区被工具栏压短，`BoxFit.cover` 会裁掉图片的
+/// 上下（用户看到的"底部显示不全"）。
+Size comparisonCardSize({
+  required double aspectRatio,
+  required Size maxSize,
+  double footerHeight = 0,
+}) {
+  final safeAspectRatio = aspectRatio.isFinite && aspectRatio > 0
+      ? aspectRatio
+      : 1.0;
+  final maxWidth = maxSize.width.isFinite
+      ? math.max(0.0, maxSize.width)
+      : 500.0;
+  final footer = footerHeight.isFinite ? math.max(0.0, footerHeight) : 0.0;
+  final mediaMaxHeight = math.max(0.0, maxSize.height - footer);
+  final maxHeight = mediaMaxHeight.isFinite ? mediaMaxHeight : 650.0;
+
+  var width = maxWidth;
+  var height = width / safeAspectRatio;
+  if (height > maxHeight) {
+    height = maxHeight;
+    width = height * safeAspectRatio;
+  }
+  return Size(
+    width.clamp(0.0, maxWidth).toDouble(),
+    height.clamp(0.0, maxHeight).toDouble() + footer,
+  );
+}
+
 /// Synchronized before/after image comparison with a draggable divider.
 class ImageComparisonView extends ConsumerStatefulWidget {
   const ImageComparisonView({
     super.key,
     required this.sourceImageBytes,
     required this.generatedImageBytes,
-    this.fit = BoxFit.cover,
+    this.fit = BoxFit.contain,
     this.showPixelScaleControls = false,
     this.viewportHeight,
+    this.surfaceRadius = _defaultSurfaceRadius,
   });
+
+  /// 表面圆角。嵌在卡片里时要传卡片的圆角（[ImageCardFrame.defaultRadius]），
+  /// 半径不一致会让卡片下层的透明背景在图片四周露出一圈浅色边。
+  final double surfaceRadius;
+
+  static const double _defaultSurfaceRadius = 14;
 
   final Uint8List sourceImageBytes;
   final Uint8List generatedImageBytes;
@@ -166,7 +205,7 @@ class _ImageComparisonViewState extends ConsumerState<ImageComparisonView> {
 
   @override
   Widget build(BuildContext context) => ClipRRect(
-    borderRadius: BorderRadius.circular(14),
+    borderRadius: BorderRadius.circular(widget.surfaceRadius),
     child: Column(
       mainAxisSize: widget.viewportHeight == null
           ? MainAxisSize.max
