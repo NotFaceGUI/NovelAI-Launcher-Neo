@@ -57,6 +57,8 @@ class OpusUsageChip extends ConsumerWidget {
         return (
           hasOpusUsageLimit: params.capabilities.hasOpusUsageLimit,
           area: billingSize.width * billingSize.height,
+          // 节约模式单张消耗约为 High 档的 58%，同样配额能出更多张。
+          usageRatio: params.capabilities.opusUsageRatio,
         );
       }),
     );
@@ -72,8 +74,10 @@ class OpusUsageChip extends ConsumerWidget {
     final accentColor = exhausted
         ? theme.colorScheme.error
         : theme.colorScheme.primary;
-    // 按当前生成尺寸折算：大图一张消耗多份配额，估算张数随之缩减。
-    final quotaUnits = _quotaUnitsForArea(modelInfo.area);
+    // 按当前生成尺寸折算：大图一张消耗多份配额，估算张数随之缩减；
+    // 节约模式每张只占 0.58 份，张数随之增加。
+    final quotaUnits =
+        _quotaUnitsForArea(modelInfo.area) * modelInfo.usageRatio;
     final estimatedImages = (percent * _imagesPerPercent / quotaUnits).round();
 
     final tooltip = exhausted

@@ -81,6 +81,39 @@ void main() {
     expect(find.text('低分辨率'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('节约模式隐藏负面预设选择器', (tester) async {
+    Widget buildSubject(String model) => ProviderScope(
+      overrides: [
+        ucPresetNotifierProvider.overrideWith(_TestUcPresetNotifier.new),
+        ucCustomEntriesProvider.overrideWith((ref) => const []),
+        currentUcEntryProvider.overrideWith((ref) => null),
+      ],
+      child: MaterialApp(
+        locale: const Locale('zh'),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: Scaffold(body: UcPresetSelector(model: model)),
+      ),
+    );
+
+    // 节约模式固定 Heavy 预设，入口整块隐藏（不是置灰提示）。
+    await tester.pumpWidget(
+      buildSubject(ImageModels.animeDiffusionV5FullMedium),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(UcPresetSelector), findsOneWidget);
+    expect(find.byIcon(Icons.block), findsNothing);
+    expect(find.byIcon(Icons.block_outlined), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    // High 档照常显示入口。
+    await tester.pumpWidget(buildSubject(ImageModels.animeDiffusionV5Full));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.block), findsOneWidget);
+  });
 }
 
 class _TestQualityPresetNotifier extends QualityPresetNotifier {

@@ -176,6 +176,43 @@ void main() {
       expect(commentJson, isNot(contains('tag_hint_uc_preset')));
     });
 
+    test('should record the effective medium-effort sampling settings', () {
+      const params = ImageParams(
+        prompt: '1girl',
+        negativePrompt: 'bad hands',
+        model: ImageModels.animeDiffusionV5FullMedium,
+        steps: 28,
+        sampler: Samplers.kDpmpp2mSde,
+        cfgRescale: 0.4,
+        ucPreset: UcPresets.lightApiValue,
+      );
+
+      final commentJson = ImageSaveUtils.buildCommentJson(
+        params: params,
+        actualSeed: 123,
+      );
+
+      // 节约模式覆盖了步数、采样器、rescale 与 UC 预设，元数据必须记录
+      // 实际发送值，重新导入才能复现同一张图。
+      expect(commentJson['steps'], 14);
+      expect(commentJson['sampler'], Samplers.kEulerAncestral);
+      expect(commentJson['cfg_rescale'], 0);
+      expect(commentJson['uc_preset'], UcPresets.heavyApiValue);
+      expect(commentJson['tag_hint_uc_preset'], 2);
+
+      // Source 指纹指向节约模式权重，不能被解析回 High 档。
+      final source = ImageSaveUtils.getModelSourceName(params.model);
+      expect(source, 'NovelAI Diffusion V5 93F4BD30');
+      expect(
+        NaiImageMetadata.fromNaiComment({
+          'Comment': jsonEncode(commentJson),
+          'Software': 'NovelAI',
+          'Source': source,
+        }).model,
+        ImageModels.animeDiffusionV5FullMedium,
+      );
+    });
+
     test('should preserve the selected V5 alpha mode in metadata', () {
       const params = ImageParams(
         model: ImageModels.animeDiffusionV5Curated,

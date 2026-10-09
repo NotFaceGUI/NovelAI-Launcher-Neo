@@ -142,6 +142,10 @@ class GenerationSettingsService {
     const aliases = <String, String>{
       'v5': ImageModels.animeDiffusionV5Full,
       'v5 full': ImageModels.animeDiffusionV5Full,
+      // 节约模式（Medium effort）只有 V5 Full 提供。
+      'v5 medium': ImageModels.animeDiffusionV5FullMedium,
+      'v5 full medium': ImageModels.animeDiffusionV5FullMedium,
+      'v5 economy': ImageModels.animeDiffusionV5FullMedium,
       'v5 curated': ImageModels.animeDiffusionV5Curated,
       'v4.5': ImageModels.animeDiffusionV45Full,
       'v45': ImageModels.animeDiffusionV45Full,

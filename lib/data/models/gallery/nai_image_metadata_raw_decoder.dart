@@ -950,10 +950,17 @@ class NaiImageMetadataRawDecoder {
     // Official PNG Source fingerprints are exact model identifiers. Do not
     // fall back to prompt/UC inference when the Source text is ambiguous.
     // Production writes `NovelAI Diffusion V5 <hash>`; the known Full hashes
-    // come from the web client (657484A5 / 0ADF9AB7), everything else in the
-    // V5 family resolves to Curated, mirroring the official parser. Staging
-    // used the enum name form (`DiffusionModelMetaName.NAIv5 DE206BDA`).
+    // come from the web client (657484A5 / 0ADF9AB7), the Medium-effort
+    // hashes (93F4BD30 / 70AB5786) identify the cost-saving model, everything
+    // else in the V5 family resolves to Curated, mirroring the official
+    // parser. Staging used the enum name form
+    // (`DiffusionModelMetaName.NAIv5 DE206BDA`).
     if (normalized.contains('naiv5') || normalized.contains('diffusion v5')) {
+      if (normalized.contains('93f4bd30') ||
+          normalized.contains('70ab5786') ||
+          normalized.contains('full medium')) {
+        return ImageModels.animeDiffusionV5FullMedium;
+      }
       return normalized.contains('657484a5') ||
               normalized.contains('0adf9ab7') ||
               normalized.contains('full')

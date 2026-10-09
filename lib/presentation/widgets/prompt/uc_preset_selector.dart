@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/api_constants.dart';
+import '../../../core/constants/model_capabilities.dart';
 import '../../../core/utils/localization_extension.dart';
 import '../../../data/models/tag_library/tag_library_entry.dart';
 import '../../providers/uc_preset_provider.dart';
@@ -39,6 +40,10 @@ class UcPresetSelector extends ConsumerStatefulWidget {
 class _UcPresetSelectorState extends ConsumerState<UcPresetSelector> {
   final _buttonKey = GlobalKey();
 
+  /// 节约模式（Medium effort）固定 Heavy 预设，该入口不提供。
+  bool get _isLockedByEffort =>
+      ModelCapabilityRegistry.of(widget.model).locksUndesiredContent;
+
   String _getPresetDisplayName(BuildContext context, UcPresetType type) {
     switch (type) {
       case UcPresetType.heavy:
@@ -56,6 +61,10 @@ class _UcPresetSelectorState extends ConsumerState<UcPresetSelector> {
 
   @override
   Widget build(BuildContext context) {
+    // 节约模式的负面预设由服务端固定，选择器整块隐藏。
+    if (_isLockedByEffort) {
+      return const SizedBox.shrink();
+    }
     final theme = Theme.of(context);
     final presetState = ref.watch(ucPresetNotifierProvider);
     final customEntries = ref.watch(ucCustomEntriesProvider);

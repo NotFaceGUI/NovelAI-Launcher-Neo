@@ -97,6 +97,12 @@ class ImageModels {
   static const String animeDiffusionV5FullInpainting =
       'nai-diffusion-5-full-inpainting';
 
+  // V5 Full 节约模式（Medium effort，2026-10-08 上线）
+  static const String animeDiffusionV5FullMedium =
+      'nai-diffusion-5-full-medium';
+  static const String animeDiffusionV5FullMediumInpainting =
+      'nai-diffusion-5-full-medium-inpainting';
+
   /// V5 测试期的历史模型键。
   ///
   /// 正式版上线后不再出现在任何界面，仅用于识别测试期生成图片的元数据
@@ -105,6 +111,7 @@ class ImageModels {
 
   static const List<String> allModels = [
     animeDiffusionV5Full,
+    animeDiffusionV5FullMedium,
     animeDiffusionV5Curated,
     animeDiffusionV45Full,
     animeDiffusionV45Curated,
@@ -117,6 +124,7 @@ class ImageModels {
 
   static const Map<String, String> modelDisplayNames = {
     animeDiffusionV5Full: 'NAI Diffusion V5 (Full)',
+    animeDiffusionV5FullMedium: 'NAI Diffusion V5 (Full · Medium)',
     animeDiffusionV5Curated: 'NAI Diffusion V5 (Curated)',
     animeDiffusionV45Full: 'NAI Diffusion V4.5 (Full)',
     animeDiffusionV45Curated: 'NAI Diffusion V4.5 (Curated)',
@@ -148,6 +156,39 @@ class ImageModels {
     return model;
   }
 
+  /// 是否为 V5 Full 节约模式（Medium effort）模型。
+  ///
+  /// 只能看 `-full-medium`：`nai-diffusion-5-full-medium` 同样以
+  /// `nai-diffusion-5-full` 开头，任何前缀判断都必须先排除该档位。
+  static bool isMediumEffortModel(String model) =>
+      model.contains('-full-medium');
+
+  /// 该模型是否提供 Effort 档位。
+  ///
+  /// 官网只对 V5 Full 及其 inpainting 变体提供 Medium，Curated 与更早的
+  /// 模型没有该档位；这里用精确 ID 判定，避免把未登记模型误放进来。
+  static bool supportsEffortToggle(String model) => const {
+    animeDiffusionV5Full,
+    animeDiffusionV5FullMedium,
+    animeDiffusionV5FullInpainting,
+    animeDiffusionV5FullMediumInpainting,
+  }.contains(model);
+
+  /// 读取模型 ID 对应的 Effort 档位。
+  static EffortLevel effortLevelOf(String model) =>
+      isMediumEffortModel(model) ? EffortLevel.medium : EffortLevel.high;
+
+  /// 在 Effort 档位之间切换，并保留 inpainting 变体。
+  static String resolveEffortModel(String model, EffortLevel level) {
+    final isInpainting = isInpaintingModel(model);
+    if (level == EffortLevel.medium) {
+      return isInpainting
+          ? animeDiffusionV5FullMediumInpainting
+          : animeDiffusionV5FullMedium;
+    }
+    return isInpainting ? animeDiffusionV5FullInpainting : animeDiffusionV5Full;
+  }
+
   /// 判断是否使用 V4 起的提示词结构（V4、V4.5、V5 均为 true）
   static bool isV4Model(String model) =>
       ModelCapabilityRegistry.of(model).promptStructure == PromptStructure.v4;
@@ -172,6 +213,7 @@ class ImageModels {
       // V5 Curated 的重绘权重尚未就绪，网页端映射到 V4.5 Curated Inpainting。
       animeDiffusionV5Curated => animeDiffusionV45CuratedInpainting,
       animeDiffusionV5Full => animeDiffusionV5FullInpainting,
+      animeDiffusionV5FullMedium => animeDiffusionV5FullMediumInpainting,
       animeDiffusionV45Full => animeDiffusionV45FullInpainting,
       animeDiffusionV45Curated => animeDiffusionV45CuratedInpainting,
       animeDiffusionV4Full => animeDiffusionV4FullInpainting,
@@ -185,6 +227,7 @@ class ImageModels {
   static String resolveBaseModel(String model) {
     return switch (model) {
       animeDiffusionV5FullInpainting => animeDiffusionV5Full,
+      animeDiffusionV5FullMediumInpainting => animeDiffusionV5FullMedium,
       animeDiffusionV5CuratedInpainting => animeDiffusionV5Curated,
       animeDiffusionV45FullInpainting => animeDiffusionV45Full,
       animeDiffusionV45CuratedInpainting => animeDiffusionV45Curated,
@@ -373,6 +416,8 @@ class QualityTags {
     // 按这条实证登记；两个 V5 变体在官网代码里没有拆分。
     ImageModels.v5StagingKey: 'very aesthetic, masterpiece, no text',
     ImageModels.animeDiffusionV5Full: 'very aesthetic, masterpiece, no text',
+    ImageModels.animeDiffusionV5FullMedium:
+        'very aesthetic, masterpiece, no text',
     ImageModels.animeDiffusionV5Curated: 'very aesthetic, masterpiece, no text',
 
     // V4.5 系列 (添加到末尾)
@@ -416,6 +461,7 @@ class QualityTags {
   static const Map<String, Map<String, String>> modelQualityTagTiers = {
     ImageModels.v5StagingKey: _v5QualityTiers,
     ImageModels.animeDiffusionV5Full: _v5QualityTiers,
+    ImageModels.animeDiffusionV5FullMedium: _v5QualityTiers,
     ImageModels.animeDiffusionV5Curated: _v5QualityTiers,
   };
 
@@ -872,6 +918,8 @@ class UcPresets {
       case ImageModels.animeDiffusionV5CuratedInpainting:
       case ImageModels.animeDiffusionV5Full:
       case ImageModels.animeDiffusionV5FullInpainting:
+      case ImageModels.animeDiffusionV5FullMedium:
+      case ImageModels.animeDiffusionV5FullMediumInpainting:
         return v5Presets;
       case ImageModels.animeDiffusionV45Full:
         return v45FullPresets;

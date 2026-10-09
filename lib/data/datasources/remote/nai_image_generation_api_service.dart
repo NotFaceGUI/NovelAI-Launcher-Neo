@@ -63,6 +63,16 @@ class NAIImageGenerationApiService {
   /// Maps model-specific sampler compatibility exactly as the legacy service.
   @visibleForTesting
   static String mapSamplerForModel(String sampler, String model) {
+    if (ImageModels.isMediumEffortModel(model)) {
+      // 节约模式只支持 Euler Ancestral，服务端固定该采样器。
+      if (sampler != Samplers.kEulerAncestral) {
+        AppLogger.w(
+          'Model $model only supports Euler Ancestral, falling back to Euler Ancestral',
+          'ImgGen',
+        );
+      }
+      return Samplers.kEulerAncestral;
+    }
     if (sampler == Samplers.ddim || sampler == Samplers.ddimV3) {
       if (ImageModels.isV4Model(model) || model == 'N/A') {
         AppLogger.w(

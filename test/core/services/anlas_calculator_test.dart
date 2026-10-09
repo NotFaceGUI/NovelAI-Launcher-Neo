@@ -235,6 +235,42 @@ void main() {
       expect(priceFor(ImageModels.v5StagingKey), (v45 * 1.5).ceil());
     });
 
+    // 节约模式：步数项再乘官网常量 K=1/1.06521739，且实际按 14 步发送。
+    // 832×1216@14 步：ceil(2.99+7.65)=11，11×1.5=16.5 → 17。
+    test('prices the V5 Full Medium effort below the High effort', () {
+      int priceFor(String model, int steps) =>
+          AnlasCalculator.calculateFromValues(
+            width: 832,
+            height: 1216,
+            steps: steps,
+            nSamples: 1,
+            smea: false,
+            smeaDyn: false,
+            model: model,
+          );
+
+      final high = priceFor(ImageModels.animeDiffusionV5Full, 23);
+      final medium = priceFor(ImageModels.animeDiffusionV5FullMedium, 14);
+
+      expect(high, 26);
+      expect(medium, 17);
+      expect(medium, lessThan(high));
+    });
+
+    test('bills Medium effort by the fixed step count, not the stored one', () {
+      // 状态里可能残留 High 档的 28 步，实际发送固定为 14 步。
+      const params = ImageParams(
+        model: ImageModels.animeDiffusionV5FullMedium,
+        steps: 28,
+        width: 832,
+        height: 1216,
+      );
+
+      expect(AnlasCalculator.calculate(params), 17);
+      // 14 步 ≤ 28 且面积 ≤ 1MP，Opus 免费额度照常生效。
+      expect(AnlasCalculator.calculate(params, isOpus: true), 0);
+    });
+
     test('does not grant the V5 Opus discount once the quota runs dry', () {
       int cost({required bool exhausted}) =>
           AnlasCalculator.calculateFromValues(

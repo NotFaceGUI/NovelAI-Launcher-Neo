@@ -2837,6 +2837,24 @@ abstract class AppLocalizations {
   /// **'Furry'**
   String get generation_modelModeFurry;
 
+  /// No description provided for @generation_effort.
+  ///
+  /// In en, this message translates to:
+  /// **'Effort'**
+  String get generation_effort;
+
+  /// No description provided for @generation_effortHigh.
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get generation_effortHigh;
+
+  /// No description provided for @generation_effortMedium.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get generation_effortMedium;
+
   /// No description provided for @generation_opusUsageRemaining.
   ///
   /// In en, this message translates to:

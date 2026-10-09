@@ -296,6 +296,37 @@ extension ImageParamsExtension on ImageParams {
   /// 检查是否为 Inpainting 模型
   bool get isInpaintingModel => ImageModels.isInpaintingModel(model);
 
+  /// 当前模型是否有可渲染的高级采样选项。
+  ///
+  /// V3 的 SMEA 与非 DDIM 采样器绑定，V4+ 只有支持 Rescale 的模型才显示
+  /// Rescale 滑杆；节约模式两者都没有，高级选项整块不渲染，避免展开后只有空白。
+  bool get hasAdvancedSamplingOptions =>
+      (isV3Model && !sampler.contains('ddim')) ||
+      (isV4Model && capabilities.supportsCfgRescale);
+
+  /// 当前模型是否为节约模式（Medium effort）。
+  bool get isMediumEffort => capabilities.effort == EffortLevel.medium;
+
+  /// 请求实际发送的采样步数。
+  ///
+  /// 节约模式由服务端锁定 14 步：界面与请求都以该值为准，用户保存的步数
+  /// 留在状态里，切回 High 档时原样恢复。
+  int get effectiveSteps => capabilities.fixedSteps ?? steps;
+
+  /// 请求实际发送的采样器（节约模式固定 Euler Ancestral）。
+  String get effectiveSampler => capabilities.fixedSampler ?? sampler;
+
+  /// 请求实际发送的 Prompt Guidance Rescale（节约模式固定 0）。
+  double get effectiveCfgRescale =>
+      capabilities.supportsCfgRescale ? cfgRescale : 0.0;
+
+  /// 请求实际发送的 UC 预设。
+  ///
+  /// 节约模式不支持自定义负面预设，固定为 Heavy；用户的预设选择保留在
+  /// 状态里，切回 High 档时继续生效。
+  int get effectiveUcPreset =>
+      capabilities.locksUndesiredContent ? UcPresets.heavyApiValue : ucPreset;
+
   /// 透明背景是否真的会写进请求。
   ///
   /// 官网对不支持透明输出的模型直接删掉相关参数，开关本身可以保持开着，

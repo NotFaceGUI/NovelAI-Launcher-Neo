@@ -54,22 +54,24 @@ class ImageSaveUtils {
       omit: params.omitQualityTagHint,
     );
     final ucPresetTagHint = UcPresets.toTagHint(
-      params.ucPreset,
+      params.effectiveUcPreset,
       omit: params.omitUcPresetTagHint,
     );
     final commentJson = <String, dynamic>{
       'prompt': params.prompt,
       'uc': params.negativePrompt,
       'seed': actualSeed,
-      'steps': params.steps,
+      // 节约模式会覆盖步数、采样器、rescale 与 UC 预设，这里记录实际发送值，
+      // 让元数据还原出的请求与本次生成完全一致。
+      'steps': params.effectiveSteps,
       'width': params.width,
       'height': params.height,
       'scale': params.scale,
       'uncond_scale': 0.0,
-      'cfg_rescale': params.cfgRescale,
+      'cfg_rescale': params.effectiveCfgRescale,
       'n_samples': 1,
       'noise_schedule': params.noiseSchedule,
-      'sampler': params.sampler,
+      'sampler': params.effectiveSampler,
       'sm': params.smea,
       'sm_dyn': params.smeaDyn,
       'model': params.model,
@@ -77,7 +79,7 @@ class ImageSaveUtils {
       // 重新生成时还原用户的模式选择。
       'model_mode': params.modelMode.name,
       'quality_toggle': params.qualityToggle,
-      'uc_preset': params.ucPreset,
+      'uc_preset': params.effectiveUcPreset,
       if (qualityTagHint != null) 'tag_hint_qt': qualityTagHint,
       if (ucPresetTagHint != null) 'tag_hint_uc_preset': ucPresetTagHint,
       // NAI官方格式字段
@@ -258,7 +260,7 @@ class ImageSaveUtils {
             negativePrompt: params.negativePrompt,
             model: params.model,
             qualityToggle: params.qualityToggle,
-            ucPreset: params.ucPreset,
+            ucPreset: params.effectiveUcPreset,
             transparentBackground: params.transparentBackground,
             qualityTier: params.qualityTier,
             modelMode: params.modelMode,
@@ -511,6 +513,10 @@ class ImageSaveUtils {
     if (model.contains('diffusion-5') || model == ImageModels.v5StagingKey) {
       // 官方解析按已知 Full 指纹区分，其余 V5 一律归 Curated；
       // Full 带上网页端的真实指纹保证自家图能被官网与启动器双向识别。
+      // 节约模式是独立权重，带自己的指纹，否则会被解析回 High 档。
+      if (ImageModels.isMediumEffortModel(model)) {
+        return 'NovelAI Diffusion V5 93F4BD30';
+      }
       return model.contains('diffusion-5-full')
           ? 'NovelAI Diffusion V5 657484A5'
           : 'NovelAI Diffusion V5';
@@ -712,7 +718,9 @@ class ImageSaveUtils {
       RegExp(r'[^A-Za-z0-9]'),
       '',
     );
-    final fileExtension = sanitizedExtension.isEmpty ? 'png' : sanitizedExtension;
+    final fileExtension = sanitizedExtension.isEmpty
+        ? 'png'
+        : sanitizedExtension;
     final preferredStem = preferredFileName == null
         ? ''
         : p

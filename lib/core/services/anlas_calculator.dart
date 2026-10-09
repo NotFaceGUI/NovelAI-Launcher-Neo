@@ -90,7 +90,7 @@ class AnlasCalculator {
     return calculateRequestCost(
       width: params.width,
       height: params.height,
-      steps: params.steps,
+      steps: params.effectiveSteps,
       batchCount: params.nSamples,
       batchSize: batchSize,
       smea: params.effectiveSmea,
@@ -201,9 +201,14 @@ class AnlasCalculator {
 
     if (capabilities.anlasFormula == AnlasFormula.modern) {
       // 网页端只对面积与步数部分取整，随后连乘 SMEA 倍率、模型倍率与重绘
-      // 强度，最后统一取整。V5 的模型倍率是 1.5。
+      // 强度，最后统一取整。V5 的模型倍率是 1.5，节约模式的步数项再乘
+      // 官网常量 K（1/1.06521739）。
       final baseCost =
-          (_areaCoefficient * pixels + _stepAreaCoefficient * pixels * steps)
+          (_areaCoefficient * pixels +
+                  _stepAreaCoefficient *
+                      pixels *
+                      steps *
+                      capabilities.anlasStepFactor)
               .ceil();
       final smeaFactor = !smea ? 1.0 : (!smeaDyn ? 1.2 : 1.4);
       perSample = baseCost * smeaFactor * capabilities.anlasMultiplier;

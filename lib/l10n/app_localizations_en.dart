@@ -1505,6 +1505,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get generation_modelModeFurry => 'Furry';
 
   @override
+  String get generation_effort => 'Effort';
+
+  @override
+  String get generation_effortHigh => 'High';
+
+  @override
+  String get generation_effortMedium => 'Medium';
+
+  @override
   String generation_opusUsageRemaining(Object percent) {
     return '$percent% of Opus Generations remaining';
   }

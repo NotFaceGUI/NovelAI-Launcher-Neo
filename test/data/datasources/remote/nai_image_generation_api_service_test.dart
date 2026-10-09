@@ -141,6 +141,27 @@ void main() {
     );
   });
 
+  test('locks the medium effort sampler to Euler Ancestral', () {
+    // 节约模式只支持 Euler Ancestral，存量选择一律改写后再发送。
+    for (final model in [
+      ImageModels.animeDiffusionV5FullMedium,
+      ImageModels.animeDiffusionV5FullMediumInpainting,
+    ]) {
+      for (final sampler in [
+        Samplers.kDpmpp2mSde,
+        Samplers.kEuler,
+        Samplers.ddim,
+        Samplers.kEulerAncestral,
+      ]) {
+        expect(
+          NAIImageGenerationApiService.mapSamplerForModel(sampler, model),
+          Samplers.kEulerAncestral,
+          reason: '$sampler on $model',
+        );
+      }
+    }
+  });
+
   test('sends official transport headers with generation requests', () async {
     final adapter = _PendingDioAdapter();
     final dio = Dio()..httpClientAdapter = adapter;

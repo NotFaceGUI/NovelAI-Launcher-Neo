@@ -24,6 +24,18 @@ enum RandomPromptProfile {
 /// 提示词 token 计数使用的分词器。
 enum TokenizerKind { clip, t5, qwen35 }
 
+/// NovelAI Diffusion V5 Full 的 Effort 档位（官网 2026-10-08 上线）。
+///
+/// Medium 用蒸馏权重把默认消耗降到 High 的约 58%，代价是采样设置由服务端
+/// 固定；只有 V5 Full 与其 inpainting 变体提供该档位。
+enum EffortLevel {
+  /// 官网默认档位：全部采样设置可调。
+  high,
+
+  /// 节约模式：固定 14 步、Euler Ancestral 与 Heavy 负面预设。
+  medium,
+}
+
 /// Anlas 基础价公式族。
 enum AnlasFormula {
   /// V2 及更早的指数估算。
@@ -68,6 +80,13 @@ class ModelCapabilities {
     this.cfgDelaySigma = 19.0,
     this.anlasMultiplier = 1.0,
     this.hasOpusUsageLimit = false,
+    this.effort = EffortLevel.high,
+    this.fixedSteps,
+    this.fixedSampler,
+    this.locksUndesiredContent = false,
+    this.supportsCfgRescale = true,
+    this.anlasStepFactor = 1.0,
+    this.opusUsageRatio = 1.0,
   });
 
   /// 条目的代表模型 ID，用于日志与调试。
@@ -177,6 +196,37 @@ class ModelCapabilities {
   ///
   /// 配额随 `/user/subscription` 的 `usage` 字段返回，透支后按正常价扣 Anlas。
   final bool hasOpusUsageLimit;
+
+  /// 当前模型的 Effort 档位（官网 2026-10 的 Effort Toggle）。
+  final EffortLevel effort;
+
+  /// 服务端强制覆盖的采样步数，null 表示跟随用户设置。
+  ///
+  /// 节约模式按模型锁定 14 步，界面与请求都必须以该值为准。
+  final int? fixedSteps;
+
+  /// 服务端强制覆盖的采样器，null 表示跟随用户设置。
+  final String? fixedSampler;
+
+  /// 是否锁定 Undesired Content（固定 Heavy 预设，不接受自定义负面提示词）。
+  ///
+  /// 官网节约模式不支持自定义 UC，只保留 Heavy 预设与提示词内的负权重。
+  final bool locksUndesiredContent;
+
+  /// 是否支持 Prompt Guidance Rescale（`cfg_rescale`）。
+  ///
+  /// 节约模式不支持该滑杆，请求固定发 0。
+  final bool supportsCfgRescale;
+
+  /// Anlas 基础价公式里步数项的倍率（官网前端常量 K）。
+  ///
+  /// 节约模式为 `1 / 1.06521739`，其余模型为 1。
+  final double anlasStepFactor;
+
+  /// Opus 配额池的单张消耗比例，1 表示与 High 档 23 步基准相同。
+  ///
+  /// 官网口径：节约模式默认设置下约省 42%，对应 0.58。
+  final double opusUsageRatio;
 
   /// 是否支持多角色提示词与角色定位。
   bool get supportsCharacterPositioning => maxCharacters > 0;
@@ -376,6 +426,44 @@ class ModelCapabilityRegistry {
     hasOpusUsageLimit: true,
   );
 
+  /// V5 Full 节约模式（Medium effort，官网 2026-10-08 上线）。
+  ///
+  /// 与 [v5Full] 同权重家族，但服务端固定 14 步、Euler Ancestral 与
+  /// Heavy 负面预设，且不支持 Prompt Guidance Rescale；基础价按 58% 计。
+  static const ModelCapabilities v5FullMedium = ModelCapabilities(
+    id: ImageModels.animeDiffusionV5FullMedium,
+    promptStructure: PromptStructure.v4,
+    anlasFormula: AnlasFormula.modern,
+    tokenizer: TokenizerKind.qwen35,
+    tokenLimit: 1471,
+    paramsVersion: 4,
+    defaultScale: 4.0,
+    defaultSteps: 14,
+    randomPromptProfile: RandomPromptProfile.characterPrompts,
+    maxCharacters: maximumCharacterCount,
+    supportsCharacterInteraction: true,
+    supportsImg2ImgInpainting: true,
+    supportsTransparentBackground: true,
+    supportsMaxEnhance: true,
+    supportsEnhancePromptAdd: true,
+    supportsTextRendering: true,
+    supportsAutoText: true,
+    supportsModelMode: true,
+    supportsNoiseSchedule: true,
+    supportsVarietyPlus: true,
+    retainsVarietyPlus: false,
+    cfgDelaySigma: 58.0,
+    anlasMultiplier: 1.5,
+    hasOpusUsageLimit: true,
+    effort: EffortLevel.medium,
+    fixedSteps: 14,
+    fixedSampler: Samplers.kEulerAncestral,
+    locksUndesiredContent: true,
+    supportsCfgRescale: false,
+    anlasStepFactor: 1 / 1.06521739,
+    opusUsageRatio: 0.58,
+  );
+
   /// 精确匹配表，inpainting 变体与测试期别名都指向所属家族。
   static const Map<String, ModelCapabilities> _exactMatches = {
     ImageModels.animeCurated: v1,
@@ -398,6 +486,8 @@ class ModelCapabilityRegistry {
     ImageModels.animeDiffusionV5CuratedInpainting: v5Curated,
     ImageModels.animeDiffusionV5Full: v5Full,
     ImageModels.animeDiffusionV5FullInpainting: v5Full,
+    ImageModels.animeDiffusionV5FullMedium: v5FullMedium,
+    ImageModels.animeDiffusionV5FullMediumInpainting: v5FullMedium,
     ImageModels.v5StagingKey: v5Curated,
   };
 
@@ -416,7 +506,10 @@ class ModelCapabilityRegistry {
     if (exact != null) return exact;
 
     if (model.contains('diffusion-5')) {
-      return model.contains('full') ? v5Full : v5Curated;
+      if (!model.contains('full')) return v5Curated;
+      // `nai-diffusion-5-full-medium` 同时包含 `diffusion-5-full`，
+      // 必须显式区分 Medium，否则会套用 High 的默认步数与计费。
+      return model.contains('medium') ? v5FullMedium : v5Full;
     }
     if (model.contains('diffusion-4-5')) {
       return model.contains('curated') ? v45Curated : v45Full;

@@ -3,13 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/api_constants.dart';
+import '../../../../core/constants/model_capabilities.dart';
 import '../../../../core/enums/model_mode.dart';
 import '../../../../core/utils/localization_extension.dart';
 import '../../../../data/models/image/image_params.dart';
 import '../../../providers/image_generation_provider.dart';
 import '../../../widgets/common/app_toast.dart';
-import '../../../widgets/common/themed_dropdown.dart';
 import '../../../widgets/common/model_family_icon.dart';
+import '../../../widgets/common/themed_dropdown.dart';
 import '../../../widgets/common/themed_input.dart';
 import '../../../widgets/common/themed_slider.dart';
 import '../canvas/canvas_actions.dart';
@@ -38,7 +39,7 @@ class ParamSectionTitle extends StatelessWidget {
   }
 }
 
-/// 模型选择分节（模型 + Model Mode）
+/// 模型选择分节（模型 + Effort 档位 + Model Mode）
 class ModelSection extends ConsumerWidget {
   const ModelSection({super.key});
 
@@ -51,11 +52,16 @@ class ModelSection extends ConsumerWidget {
           modelMode: params.modelMode,
           // 官网只在支持 Furry Mode 的模型上显示该开关（V4/V4.5/V5）。
           supportsModelMode: params.capabilities.supportsModelMode,
+          effort: params.capabilities.effort,
         ),
       ),
     );
     // 测试期的 custom 键归一到正式 ID，保证下拉框 value 一定在候选项里。
     final normalizedModel = ImageModels.migrateLegacyModel(selection.model);
+    // 官网只对 V5 Full 家族给出 Effort 档位（Curated 没有 Medium 变体）。
+    final supportsEffortToggle = ImageModels.supportsEffortToggle(
+      normalizedModel,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -83,6 +89,21 @@ class ModelSection extends ConsumerWidget {
             }
           },
         ),
+        if (supportsEffortToggle) ...[
+          const SizedBox(height: 12),
+          ParamSectionTitle(context.l10n.generation_effort),
+          const SizedBox(height: 8),
+          _EffortSwitch(
+            value: selection.effort,
+            onChanged: (level) {
+              ref
+                  .read(generationParamsNotifierProvider.notifier)
+                  .updateModel(
+                    ImageModels.resolveEffortModel(normalizedModel, level),
+                  );
+            },
+          ),
+        ],
         if (selection.supportsModelMode) ...[
           const SizedBox(height: 12),
           ParamSectionTitle(context.l10n.generation_modelMode),
@@ -118,6 +139,50 @@ String _modelModeLabel(BuildContext context, ModelMode mode) => switch (mode) {
   ModelMode.anime => context.l10n.generation_modelModeAnime,
   ModelMode.furry => context.l10n.generation_modelModeFurry,
 };
+
+/// 生成模式（Effort）分段开关：与其他分节一致，占满整行宽。
+///
+/// 使用 Material 默认圆角样式，两段等分；选中段用中性抬升色面填充。
+class _EffortSwitch extends StatelessWidget {
+  const _EffortSwitch({required this.value, required this.onChanged});
+
+  final EffortLevel value;
+  final ValueChanged<EffortLevel> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return SegmentedButton<EffortLevel>(
+      expandedInsets: EdgeInsets.zero,
+      segments: [
+        ButtonSegment(
+          value: EffortLevel.medium,
+          label: Text(context.l10n.generation_effortMedium),
+        ),
+        ButtonSegment(
+          value: EffortLevel.high,
+          label: Text(context.l10n.generation_effortHigh),
+        ),
+      ],
+      selected: {value},
+      showSelectedIcon: false,
+      onSelectionChanged: (selection) => onChanged(selection.first),
+      style: ButtonStyle(
+        // 选中态用中性抬升色面，避免主题容器色在该配色下过亮。
+        backgroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? colors.surfaceContainerHighest
+              : Colors.transparent,
+        ),
+        foregroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? colors.onSurface
+              : colors.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+}
 
 /// 尺寸设置分节（标题 + 尺寸选择器）
 class SizeSection extends ConsumerWidget {
@@ -184,6 +249,8 @@ class SizeSection extends ConsumerWidget {
 }
 
 /// 采样器分节
+///
+/// 节约模式固定 Euler Ancestral，该分节直接隐藏。
 class SamplerSection extends ConsumerWidget {
   const SamplerSection({super.key});
 
@@ -191,9 +258,16 @@ class SamplerSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final data = ref.watch(
       generationParamsNotifierProvider.select(
-        (params) => (sampler: params.sampler, isV4Model: params.isV4Model),
+        (params) => (
+          sampler: params.sampler,
+          isV4Model: params.isV4Model,
+          fixedSampler: params.capabilities.fixedSampler,
+        ),
       ),
     );
+    if (data.fixedSampler != null) {
+      return const SizedBox.shrink();
+    }
     // V4 起官网不提供 DDIM；存量选择显示为实际会发送的 Euler Ancestral。
     final isDdim =
         data.sampler == Samplers.ddim || data.sampler == Samplers.ddimV3;
@@ -303,20 +377,28 @@ class NoiseScheduleSection extends ConsumerWidget {
 }
 
 /// 步数分节（标题含当前值 + 滑杆）
+///
+/// 节约模式由服务端锁定 14 步，该分节直接隐藏。
 class StepsSection extends ConsumerWidget {
   const StepsSection({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final steps = ref.watch(
-      generationParamsNotifierProvider.select((params) => params.steps),
+    final data = ref.watch(
+      generationParamsNotifierProvider.select(
+        (params) =>
+            (steps: params.steps, fixedSteps: params.capabilities.fixedSteps),
+      ),
     );
+    if (data.fixedSteps != null) {
+      return const SizedBox.shrink();
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ParamSectionTitle(context.l10n.generation_steps(steps.toString())),
+        ParamSectionTitle(context.l10n.generation_steps(data.steps.toString())),
         ThemedSlider(
-          value: steps.toDouble(),
+          value: data.steps.toDouble(),
           min: 1,
           max: 50,
           divisions: 49,
@@ -613,15 +695,23 @@ class AdvancedSamplingOptions extends ConsumerWidget {
           smea: params.smea,
           smeaDyn: params.smeaDyn,
           cfgRescale: params.cfgRescale,
+          // 节约模式不支持 Prompt Guidance Rescale。
+          supportsCfgRescale: params.capabilities.supportsCfgRescale,
         ),
       ),
     );
+
+    final showsSmea = data.isV3Model && !data.sampler.contains('ddim');
+    final showsCfgRescale = data.isV4Model && data.supportsCfgRescale;
+    if (!showsSmea && !showsCfgRescale) {
+      return const SizedBox.shrink();
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // V3 模型: SMEA 选项 (非 DDIM 采样器时显示)
-        if (data.isV3Model && !data.sampler.contains('ddim')) ...[
+        if (showsSmea) ...[
           // 标题和说明
           Padding(
             padding: const EdgeInsets.only(top: 4, bottom: 4),
@@ -693,7 +783,7 @@ class AdvancedSamplingOptions extends ConsumerWidget {
             ),
         ],
         // V4 模型: CFG Rescale
-        if (data.isV4Model)
+        if (showsCfgRescale)
           ListTile(
             contentPadding: EdgeInsets.zero,
             title: Text(

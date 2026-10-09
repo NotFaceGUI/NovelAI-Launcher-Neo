@@ -87,7 +87,7 @@ class NAIImageRequestBuilder {
       'height': params.height,
       'scale': NAIApiUtils.toJsonNumber(params.scale),
       'sampler': sampler,
-      'steps': params.steps,
+      'steps': params.effectiveSteps,
       'n_samples': params.nSamples,
       'ucPresetId': _resolveUcPresetId(),
       'qualityPresetId': _resolveQualityPresetId(),
@@ -98,7 +98,7 @@ class NAIImageRequestBuilder {
       'add_original_image': params.action == ImageGenerationAction.infill
           ? false
           : params.addOriginalImage,
-      'cfg_rescale': NAIApiUtils.toJsonNumber(params.cfgRescale),
+      'cfg_rescale': NAIApiUtils.toJsonNumber(params.effectiveCfgRescale),
       'noise_schedule': noiseSchedule,
       if (params.isV4Model || params.inpaintStrength != 1.0)
         'inpaintImg2ImgStrength': NAIApiUtils.toJsonNumber(
@@ -176,7 +176,7 @@ class NAIImageRequestBuilder {
   }
 
   String _resolveUcPresetId() {
-    return switch (params.ucPreset) {
+    return switch (params.effectiveUcPreset) {
       UcPresets.heavyApiValue => 'heavy',
       UcPresets.lightApiValue => 'light',
       UcPresets.humanFocusApiValue => 'humanFocus',
@@ -203,10 +203,10 @@ class NAIImageRequestBuilder {
   ///
   /// [ImageParams.ucPreset] 存的是请求 `ucPreset` 字段的旧版取值
   /// （0=heavy 1=light 2=humanFocus 3=none 7=furryFocus），这里换算成
-  /// tag hint 的编号体系。
+  /// tag hint 的编号体系；节约模式固定为 Heavy。
   int? _resolveUcPresetTagHint() {
     return UcPresets.toTagHint(
-      params.ucPreset,
+      params.effectiveUcPreset,
       omit: params.omitUcPresetTagHint,
     );
   }
@@ -241,6 +241,10 @@ class NAIImageRequestBuilder {
     requestParameters['normalize_reference_strength_multiple'] =
         params.normalizeVibeStrength;
 
+    // 节约模式不支持自定义负面提示词：角色级 UC 与基础 UC 一样留空，
+    // 正向角色提示词不受影响。
+    final locksUndesiredContent = params.capabilities.locksUndesiredContent;
+
     final charCaptions = <Map<String, dynamic>>[];
     final negativeCharCaptions = <Map<String, dynamic>>[];
     final characterPrompts = <Map<String, dynamic>>[];
@@ -262,13 +266,13 @@ class NAIImageRequestBuilder {
         'centers': [
           {'x': x, 'y': y},
         ],
-        'char_caption': char.negativePrompt,
+        'char_caption': locksUndesiredContent ? '' : char.negativePrompt,
       });
 
       characterPrompts.add({
         'center': {'x': x, 'y': y},
         'prompt': char.prompt,
-        'uc': char.negativePrompt,
+        'uc': locksUndesiredContent ? '' : char.negativePrompt,
         'enabled': true,
       });
     }
@@ -627,7 +631,7 @@ class NAIImageRequestBuilder {
       negativePrompt: params.negativePrompt,
       model: baseModel,
       qualityToggle: params.qualityToggle,
-      ucPreset: params.ucPreset,
+      ucPreset: params.effectiveUcPreset,
       isEnhanceRequest: params.shouldApplyEnhancePromptAddition,
       transparentBackground: params.transparentBackground,
       qualityTier: params.qualityTier,

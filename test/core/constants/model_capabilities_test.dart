@@ -170,6 +170,129 @@ void main() {
       );
     });
 
+    test('registers the V5 Full Medium effort as a locked model', () {
+      final caps = ModelCapabilityRegistry.of(
+        ImageModels.animeDiffusionV5FullMedium,
+      );
+
+      expect(caps.id, ImageModels.animeDiffusionV5FullMedium);
+      expect(caps.effort, EffortLevel.medium);
+      expect(caps.defaultSteps, 14);
+      expect(caps.fixedSteps, 14);
+      expect(caps.fixedSampler, Samplers.kEulerAncestral);
+      expect(caps.locksUndesiredContent, isTrue);
+      expect(caps.supportsCfgRescale, isFalse);
+      expect(caps.opusUsageRatio, 0.58);
+      // 权重家族与 High 档一致，只有采样与计费被锁定。
+      expect(caps.promptStructure, PromptStructure.v4);
+      expect(caps.anlasMultiplier, 1.5);
+      expect(caps.maxCharacters, ModelCapabilityRegistry.maximumCharacterCount);
+      expect(
+        ModelCapabilityRegistry.of(
+          ImageModels.animeDiffusionV5FullMediumInpainting,
+        ),
+        same(caps),
+      );
+      // High 档不受影响。
+      final high = ModelCapabilityRegistry.of(ImageModels.animeDiffusionV5Full);
+      expect(high.effort, EffortLevel.high);
+      expect(high.fixedSteps, isNull);
+      expect(high.fixedSampler, isNull);
+      expect(high.locksUndesiredContent, isFalse);
+      expect(high.supportsCfgRescale, isTrue);
+    });
+
+    test('keeps unregistered medium variants on the medium family', () {
+      // `nai-diffusion-5-full-medium` 以 `nai-diffusion-5-full` 开头，
+      // 前缀回退必须先判 Medium，否则会套用 High 的默认步数。
+      expect(
+        ModelCapabilityRegistry.of('nai-diffusion-5-full-medium-preview'),
+        same(
+          ModelCapabilityRegistry.of(ImageModels.animeDiffusionV5FullMedium),
+        ),
+      );
+      expect(
+        ModelCapabilityRegistry.of('nai-diffusion-5-curated-preview'),
+        same(ModelCapabilityRegistry.of(ImageModels.animeDiffusionV5Curated)),
+      );
+    });
+
+    test('V5 Full Medium reuses the V5 presets and quality tiers', () {
+      expect(
+        UcPresets.getPresetsForModel(ImageModels.animeDiffusionV5FullMedium),
+        same(UcPresets.v5Presets),
+      );
+      expect(
+        QualityTags.getQualityTags(ImageModels.animeDiffusionV5FullMedium),
+        QualityTags.getQualityTags(ImageModels.animeDiffusionV5Full),
+      );
+      expect(
+        QualityTags.tiersForModel(ImageModels.animeDiffusionV5FullMedium),
+        contains(QualityTags.lightTier),
+      );
+    });
+
+    test('resolves the effort helpers inside the V5 Full family', () {
+      expect(
+        ImageModels.isMediumEffortModel(ImageModels.animeDiffusionV5FullMedium),
+        isTrue,
+      );
+      expect(
+        ImageModels.isMediumEffortModel(ImageModels.animeDiffusionV5Full),
+        isFalse,
+      );
+      expect(
+        ImageModels.effortLevelOf(ImageModels.animeDiffusionV5FullMedium),
+        EffortLevel.medium,
+      );
+      expect(
+        ImageModels.effortLevelOf(ImageModels.animeDiffusionV5Full),
+        EffortLevel.high,
+      );
+
+      // 只有 V5 Full 家族有 Medium 变体。
+      expect(
+        ImageModels.supportsEffortToggle(ImageModels.animeDiffusionV5Full),
+        isTrue,
+      );
+      expect(
+        ImageModels.supportsEffortToggle(ImageModels.animeDiffusionV5Curated),
+        isFalse,
+      );
+      expect(
+        ImageModels.supportsEffortToggle(ImageModels.animeDiffusionV45Full),
+        isFalse,
+      );
+
+      expect(
+        ImageModels.resolveEffortModel(
+          ImageModels.animeDiffusionV5Full,
+          EffortLevel.medium,
+        ),
+        ImageModels.animeDiffusionV5FullMedium,
+      );
+      expect(
+        ImageModels.resolveEffortModel(
+          ImageModels.animeDiffusionV5FullMediumInpainting,
+          EffortLevel.high,
+        ),
+        ImageModels.animeDiffusionV5FullInpainting,
+      );
+      // 重绘模型与基础模型的 Medium 变体一一对应。
+      expect(
+        ImageModels.resolveInpaintingModel(
+          ImageModels.animeDiffusionV5FullMedium,
+        ),
+        ImageModels.animeDiffusionV5FullMediumInpainting,
+      );
+      expect(
+        ImageModels.resolveBaseModel(
+          ImageModels.animeDiffusionV5FullMediumInpainting,
+        ),
+        ImageModels.animeDiffusionV5FullMedium,
+      );
+    });
+
     test('V5 keeps vibe transfer and precise reference hidden', () {
       final caps = ModelCapabilityRegistry.of(ImageModels.v5StagingKey);
 
@@ -362,6 +485,7 @@ void main() {
 
       expect(models.first, ImageModels.animeDiffusionV5Full);
       expect(models, contains(ImageModels.animeDiffusionV5Curated));
+      expect(models, contains(ImageModels.animeDiffusionV5FullMedium));
       expect(models, isNot(contains(ImageModels.v5StagingKey)));
     });
 

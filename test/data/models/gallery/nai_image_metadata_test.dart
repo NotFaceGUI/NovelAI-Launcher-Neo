@@ -341,6 +341,21 @@ void main() {
         parseWithSource('NovelAI Diffusion V5 Full 1234ABCD').model,
         equals(ImageModels.animeDiffusionV5Full),
       );
+      // 节约模式是独立权重，靠自己的指纹识别，不能落回 Full 或 Curated。
+      for (final source in [
+        'NovelAI Diffusion V5 93F4BD30',
+        'NovelAI Diffusion V5 70AB5786',
+      ]) {
+        expect(
+          parseWithSource(source).model,
+          equals(ImageModels.animeDiffusionV5FullMedium),
+          reason: source,
+        );
+      }
+      expect(
+        parseWithSource('NovelAI Diffusion V5 Full Medium 1234ABCD').model,
+        equals(ImageModels.animeDiffusionV5FullMedium),
+      );
     });
 
     test('V5 metadata should hide a matching generated teXt block', () {

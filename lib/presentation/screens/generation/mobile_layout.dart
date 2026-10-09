@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/platform/platform_capabilities.dart';
 import '../../../core/utils/localization_extension.dart';
+import '../../../data/models/image/image_params.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/character_prompt_provider.dart';
 import '../../providers/fixed_tags_provider.dart';
@@ -101,6 +102,12 @@ class _MobileGenerationLayoutState
       qualityPresetNotifierProvider.select((state) => state.isEnabled),
     );
     final ucPresetState = ref.watch(ucPresetNotifierProvider);
+    // 节约模式由服务端固定 Heavy 负面预设，状态条不再展示该预设。
+    final ucLockedByEffort = ref.watch(
+      generationParamsNotifierProvider.select(
+        (params) => params.capabilities.locksUndesiredContent,
+      ),
+    );
     final fixedTagCount = ref.watch(
       fixedTagsNotifierProvider.select(
         (state) => state.enabledCount + state.negativeEnabledCount,
@@ -118,7 +125,9 @@ class _MobileGenerationLayoutState
         _controller.updateKeyboardVisibility(keyboardVisible);
         final isLauncherGenerating = generationState.isGenerating;
         final isGenerating = isLauncherGenerating || isKritaGenerating;
-        final negativePresetLabel = ucPresetState.isCustom
+        final negativePresetLabel = ucLockedByEffort
+            ? null
+            : ucPresetState.isCustom
             ? context.l10n.ucPreset_label
             : switch (ucPresetState.presetType) {
                 UcPresetType.heavy => context.l10n.ucPreset_heavy,

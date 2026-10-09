@@ -1450,6 +1450,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get generation_modelModeFurry => '兽人';
 
   @override
+  String get generation_effort => '生成模式';
+
+  @override
+  String get generation_effortHigh => '高质量';
+
+  @override
+  String get generation_effortMedium => '节约';
+
+  @override
   String generation_opusUsageRemaining(Object percent) {
     return 'Opus 免费生成剩余 $percent%';
   }
@@ -16949,6 +16958,15 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get generation_modelModeFurry => '獸人';
+
+  @override
+  String get generation_effort => '生成模式';
+
+  @override
+  String get generation_effortHigh => '高品質';
+
+  @override
+  String get generation_effortMedium => '節約';
 
   @override
   String generation_opusUsageRemaining(Object percent) {

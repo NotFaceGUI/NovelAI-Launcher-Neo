@@ -8,6 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:image/image.dart' as img;
+import 'package:nai_launcher/core/constants/api_constants.dart';
+import 'package:nai_launcher/core/constants/model_capabilities.dart';
 import 'package:nai_launcher/core/constants/storage_keys.dart';
 import 'package:nai_launcher/core/enums/precise_ref_type.dart';
 import 'package:nai_launcher/core/platform/platform_capabilities.dart';
@@ -26,6 +28,7 @@ import 'package:nai_launcher/presentation/screens/generation/widgets/size_select
 import 'package:nai_launcher/presentation/screens/generation/widgets/vibe_transfer_content.dart';
 import 'package:nai_launcher/presentation/widgets/character/inline_character_section.dart';
 import 'package:nai_launcher/presentation/widgets/common/editable_double_field.dart';
+import 'package:nai_launcher/presentation/widgets/common/themed_dropdown.dart';
 import 'package:nai_launcher/presentation/widgets/common/themed_slider.dart';
 import 'package:super_drag_and_drop/super_drag_and_drop.dart';
 
@@ -303,6 +306,146 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('character-secondary-menu')), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('节约模式隐藏固定参数并保留 Effort 档位', (tester) async {
+      tester.view.physicalSize = const Size(960, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            localStorageServiceProvider.overrideWith(
+              (ref) => _TestLocalStorageService(),
+            ),
+            vibeLibraryStorageServiceProvider.overrideWithValue(
+              _TestVibeLibraryStorageService(),
+            ),
+            kritaBridgeNotifierProvider.overrideWith(
+              (ref) => _TestKritaBridgeNotifier(),
+            ),
+          ],
+          child: const MaterialApp(
+            locale: Locale('zh'),
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            home: Scaffold(
+              body: SizedBox(width: 960, height: 2000, child: ParameterPanel()),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ParameterPanel)),
+      );
+      container
+          .read(generationParamsNotifierProvider.notifier)
+          .updateModel(ImageModels.animeDiffusionV5FullMedium);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 150));
+
+      // Effort 档位以圆角分段开关呈现，且不附加任何锁定说明文案
+      expect(find.text('生成模式'), findsOneWidget);
+      expect(find.text('节约'), findsOneWidget);
+      expect(find.text('高质量'), findsOneWidget);
+      expect(find.textContaining('节约模式固定'), findsNothing);
+      expect(
+        tester
+            .widget<SegmentedButton<EffortLevel>>(
+              find.byType(SegmentedButton<EffortLevel>),
+            )
+            .selected,
+        {EffortLevel.medium},
+      );
+
+      // 步数与采样器整块隐藏
+      expect(find.textContaining('步数'), findsNothing);
+      expect(
+        tester
+            .widgetList<ThemedSlider>(find.byType(ThemedSlider))
+            .where((slider) => slider.min == 1 && slider.max == 50),
+        isEmpty,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(SamplerSection),
+          matching: find.byType(ThemedDropdown<String>),
+        ),
+        findsNothing,
+      );
+      expect(find.text('采样器'), findsNothing);
+
+      // Prompt Guidance Rescale 不支持，高级选项整块不渲染
+      expect(find.textContaining('CFG 重缩放：'), findsNothing);
+      expect(find.text('高级选项'), findsNothing);
+
+      // 切回 High 档后固定参数重新出现，用户保存的步数原样恢复
+      container
+          .read(generationParamsNotifierProvider.notifier)
+          .updateModel(ImageModels.animeDiffusionV5Full);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 150));
+
+      expect(container.read(generationParamsNotifierProvider).steps, 28);
+      expect(find.text('步数: 28'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(SamplerSection),
+          matching: find.byType(ThemedDropdown<String>),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('节约模式的 Effort 下拉在 320 宽与 3x 文本下不溢出', (tester) async {
+      tester.view.physicalSize = const Size(320, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      tester.platformDispatcher.textScaleFactorTestValue = 3.0;
+      addTearDown(tester.view.reset);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            localStorageServiceProvider.overrideWith(
+              (ref) => _TestLocalStorageService(),
+            ),
+            vibeLibraryStorageServiceProvider.overrideWithValue(
+              _TestVibeLibraryStorageService(),
+            ),
+            kritaBridgeNotifierProvider.overrideWith(
+              (ref) => _TestKritaBridgeNotifier(),
+            ),
+          ],
+          child: const MaterialApp(
+            locale: Locale('zh'),
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            home: Scaffold(
+              body: SizedBox(width: 320, height: 1600, child: ParameterPanel()),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ParameterPanel)),
+      );
+      container
+          .read(generationParamsNotifierProvider.notifier)
+          .updateModel(ImageModels.animeDiffusionV5FullMedium);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 150));
+
+      expect(find.text('生成模式'), findsOneWidget);
+      expect(find.text('节约'), findsOneWidget);
+      expect(find.byType(SegmentedButton<EffortLevel>), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

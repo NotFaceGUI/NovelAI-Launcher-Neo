@@ -8,6 +8,7 @@ import 'package:nai_launcher/core/enums/model_mode.dart';
 import 'package:nai_launcher/core/enums/precise_ref_type.dart';
 import 'package:nai_launcher/core/network/request_builders/nai_image_request_builder.dart';
 import 'package:nai_launcher/core/utils/nai_api_utils.dart';
+import 'package:nai_launcher/data/datasources/remote/nai_image_generation_api_service.dart';
 import 'package:nai_launcher/data/models/image/image_params.dart';
 import 'package:nai_launcher/data/models/vibe/vibe_reference.dart';
 
@@ -55,7 +56,8 @@ void main() {
       equals('wolf girl'),
     );
     expect(
-      result.requestParameters['v4_prompt']['caption']['char_captions'][0]['char_caption'],
+      result
+          .requestParameters['v4_prompt']['caption']['char_captions'][0]['char_caption'],
       equals('wolf girl'),
     );
     expect(
@@ -2010,6 +2012,102 @@ void main() {
       final result = await builder.build(sampler: 'k_euler_ancestral');
 
       expect(result.requestData['input'], '1girl');
+    });
+  });
+
+  group('V5 Full Medium 节约模式', () {
+    test('locks steps, rescale, sampler and undesired content', () async {
+      const params = ImageParams(
+        prompt: '1girl, -3::hat::',
+        negativePrompt: 'zzz-custom-uc',
+        model: ImageModels.animeDiffusionV5FullMedium,
+        steps: 28,
+        sampler: Samplers.kDpmpp2mSde,
+        cfgRescale: 0.4,
+        ucPreset: UcPresets.lightApiValue,
+        qualityToggle: false,
+        characters: [
+          CharacterPrompt(prompt: 'wolf girl', negativePrompt: 'zzz-bad-tail'),
+        ],
+      );
+      final builder = NAIImageRequestBuilder(
+        params: params,
+        encodeVibe: _fakeEncodeVibe,
+      );
+
+      final result = await builder.build(
+        sampler: NAIImageGenerationApiService.mapSamplerForModel(
+          params.sampler,
+          params.model,
+        ),
+      );
+
+      // 官网 Medium 的固定项：14 步、Euler Ancestral、cfg_rescale 0、Heavy UC。
+      expect(
+        result.requestData['model'],
+        ImageModels.animeDiffusionV5FullMedium,
+      );
+      expect(result.requestParameters['steps'], 14);
+      expect(result.requestParameters['sampler'], Samplers.kEulerAncestral);
+      expect(result.requestParameters['cfg_rescale'], 0);
+      expect(result.requestParameters['ucPresetId'], 'heavy');
+      expect(result.requestParameters['tag_hint_uc_preset'], 2);
+      expect(
+        result.requestParameters['negative_prompt'],
+        UcPresets.getPresetContent(
+          ImageModels.animeDiffusionV5FullMedium,
+          UcPresetType.heavy,
+        ),
+      );
+      // 自定义负面提示词与预设选择都不进请求，负权重留在正向提示词里。
+      expect(
+        result.requestParameters['negative_prompt'],
+        isNot(contains('zzz-custom-uc')),
+      );
+      expect(result.effectivePrompt, contains('-3::hat::'));
+      // 角色级 UC 一并留空，正向角色提示词保留。
+      expect(
+        result.requestParameters['characterPrompts'][0]['prompt'],
+        'wolf girl',
+      );
+      expect(result.requestParameters['characterPrompts'][0]['uc'], isEmpty);
+      expect(
+        result
+            .requestParameters['v4_negative_prompt']['caption']['char_captions'][0]['char_caption'],
+        isEmpty,
+      );
+    });
+
+    test('keeps the stored settings for the High effort model', () async {
+      const params = ImageParams(
+        prompt: '1girl',
+        negativePrompt: 'zzz-custom-uc',
+        model: ImageModels.animeDiffusionV5Full,
+        steps: 28,
+        sampler: Samplers.kDpmpp2mSde,
+        cfgRescale: 0.4,
+        ucPreset: UcPresets.lightApiValue,
+      );
+      final builder = NAIImageRequestBuilder(
+        params: params,
+        encodeVibe: _fakeEncodeVibe,
+      );
+
+      final result = await builder.build(
+        sampler: NAIImageGenerationApiService.mapSamplerForModel(
+          params.sampler,
+          params.model,
+        ),
+      );
+
+      expect(result.requestParameters['steps'], 28);
+      expect(result.requestParameters['sampler'], Samplers.kDpmpp2mSde);
+      expect(result.requestParameters['cfg_rescale'], 0.4);
+      expect(result.requestParameters['ucPresetId'], 'light');
+      expect(
+        result.requestParameters['negative_prompt'],
+        contains('zzz-custom-uc'),
+      );
     });
   });
 }

@@ -91,12 +91,16 @@ PromptSemanticsSnapshot buildPromptSemanticsSnapshot({
     );
   }
 
-  final effectiveNegativePrompt = UcPresets.applyPresetWithNsfwCheck(
-    negativePrompt,
-    prompt,
-    model,
-    ucPreset,
-  );
+  // 节约模式不支持自定义 UC：官网固定发 V5 的 Heavy 预设，用户的负面
+  // 提示词与预设选择都不进请求（界面提示改用负权重，如 `-3::hat::`）。
+  final effectiveNegativePrompt = capabilities.locksUndesiredContent
+      ? UcPresets.getPresetContent(model, UcPresetType.heavy)
+      : UcPresets.applyPresetWithNsfwCheck(
+          negativePrompt,
+          prompt,
+          model,
+          ucPreset,
+        );
 
   return PromptSemanticsSnapshot(
     basePrompt: basePrompt,

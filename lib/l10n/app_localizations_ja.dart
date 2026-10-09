@@ -1472,6 +1472,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get generation_modelModeFurry => 'ケモノ';
 
   @override
+  String get generation_effort => '生成モード';
+
+  @override
+  String get generation_effortHigh => '通常';
+
+  @override
+  String get generation_effortMedium => '節約';
+
+  @override
   String generation_opusUsageRemaining(Object percent) {
     return 'Opus 無料生成の残り $percent%';
   }
