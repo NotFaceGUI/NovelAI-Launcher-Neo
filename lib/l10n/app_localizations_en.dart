@@ -4369,6 +4369,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get ucPreset_disabled => 'Undesired content preset disabled';
 
   @override
+  String artistShowcase_score(Object score) {
+    return 'Score $score';
+  }
+
+  @override
   String get ucPreset_addToNegative => 'Add to Undesired Content:';
 
   @override

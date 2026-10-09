@@ -6,6 +6,7 @@ import '../../providers/prompt_editor_preferences_provider.dart';
 import '../../../core/utils/localization_extension.dart';
 import 'prompt_tag_mode_toggle.dart';
 import 'prompt_text_selection_actions.dart';
+import 'artist_showcase_preview.dart';
 import 'tag_editor_scope.dart';
 import 'tag_editor_session.dart';
 import 'tag_editor_view.dart';
@@ -169,7 +170,7 @@ class _TagModePromptFieldState extends ConsumerState<TagModePromptField> {
           ),
         },
         // Ctrl+/ 注释（禁用）或恢复选中的提示词片段，与右键菜单共用同一实现；
-        // 该层包住两种模式的编辑器，标签模式与文本模式都生效。
+        // 画师代表作预览同样包住两种编辑器，随光标/选中变化展示。
         child: Builder(
           builder: (context) => CallbackShortcuts(
             bindings: <ShortcutActivator, VoidCallback>{
@@ -179,50 +180,53 @@ class _TagModePromptFieldState extends ConsumerState<TagModePromptField> {
               ): () =>
                   togglePromptTextSelectionEnabled(context),
             },
-            child: Stack(
-              fit: StackFit.passthrough,
-              clipBehavior: Clip.hardEdge,
-              children: [
-                // Keep the same editing subtree in both sizing modes. Offstage
-                // removes its height contribution without losing native state.
-                Offstage(
-                  offstage: widget.fitContent && _session.tagMode,
-                  child: Visibility(
-                    visible: !_session.tagMode,
-                    maintainSize: true,
-                    maintainAnimation: true,
-                    maintainState: true,
-                    child: WeightAdjustToolbarWrapper(
-                      controller: widget.controller,
-                      focusNode: widget.sourceFocusNode,
-                      enabled: widget.enabled && !_session.tagMode,
-                      enableWheelAdjustment: widget.enableWheelAdjustment,
-                      child: widget.child,
+            child: ArtistShowcasePreview(
+              session: _session,
+              child: Stack(
+                fit: StackFit.passthrough,
+                clipBehavior: Clip.hardEdge,
+                children: [
+                  // Keep the same editing subtree in both sizing modes. Offstage
+                  // removes its height contribution without losing native state.
+                  Offstage(
+                    offstage: widget.fitContent && _session.tagMode,
+                    child: Visibility(
+                      visible: !_session.tagMode,
+                      maintainSize: true,
+                      maintainAnimation: true,
+                      maintainState: true,
+                      child: WeightAdjustToolbarWrapper(
+                        controller: widget.controller,
+                        focusNode: widget.sourceFocusNode,
+                        enabled: widget.enabled && !_session.tagMode,
+                        enableWheelAdjustment: widget.enableWheelAdjustment,
+                        child: widget.child,
+                      ),
                     ),
                   ),
-                ),
-                // Null insets use normal Stack sizing without reparenting the
-                // tag editor when switching between manual and content heights.
-                if (_session.tagMode)
-                  Positioned(
-                    left: widget.fitContent ? null : 0,
-                    right: widget.fitContent ? null : 0,
-                    top: widget.fitContent ? null : 0,
-                    bottom: widget.fitContent ? null : 0,
-                    child: TagEditorView(
-                      key: ValueKey(_modeId),
-                      bottomPadding: widget.bottomPadding,
-                      session: _session,
-                      surfaceColor: widget.surfaceColor,
-                      enabled: widget.enabled,
-                      enableAutocomplete: widget.enableAutocomplete,
-                      onSearch: widget.onSearch,
-                      focusNode: widget.tagFocusNode,
+                  // Null insets use normal Stack sizing without reparenting the
+                  // tag editor when switching between manual and content heights.
+                  if (_session.tagMode)
+                    Positioned(
+                      left: widget.fitContent ? null : 0,
+                      right: widget.fitContent ? null : 0,
+                      top: widget.fitContent ? null : 0,
+                      bottom: widget.fitContent ? null : 0,
+                      child: TagEditorView(
+                        key: ValueKey(_modeId),
+                        bottomPadding: widget.bottomPadding,
+                        session: _session,
+                        surfaceColor: widget.surfaceColor,
+                        enabled: widget.enabled,
+                        enableAutocomplete: widget.enableAutocomplete,
+                        onSearch: widget.onSearch,
+                        focusNode: widget.tagFocusNode,
+                      ),
                     ),
-                  ),
-                Positioned.fill(child: _viewportActions(context)),
-                if (widget.assistant != null) widget.assistant!,
-              ],
+                  Positioned.fill(child: _viewportActions(context)),
+                  if (widget.assistant != null) widget.assistant!,
+                ],
+              ),
             ),
           ),
         ),

@@ -1853,6 +1853,12 @@
   "ucPreset_humanFocus": "人間",
   "ucPreset_none": "なし",
   "ucPreset_disabled": "除外したい要素プリセットが無効です",
+  "artistShowcase_score": "スコア {score}",
+  "@artistShowcase_score": {
+    "placeholders": {
+      "score": {}
+    }
+  },
   "ucPreset_addToNegative": "除外したい要素に追加:",
   "ucPreset_nsfwHint": "💡 アダルト コンテンツを生成するには、プロンプトに nsfw を追加します。nsfw タグは除外したい要素から自動的に削除されます",
   "ucPreset_addFromLibrary": "ライブラリから追加",

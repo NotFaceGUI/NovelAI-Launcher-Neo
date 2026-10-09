@@ -18,7 +18,18 @@ import '../app_branch_visibility.dart';
 class VideoPlayerWidget extends StatefulWidget {
   final String videoUrl;
 
-  const VideoPlayerWidget({super.key, required this.videoUrl});
+  /// 静音播放（悬浮预览卡片使用，避免悬停时突然出声）。
+  final bool muted;
+
+  /// 是否显示播放控制条。
+  final bool showControls;
+
+  const VideoPlayerWidget({
+    super.key,
+    required this.videoUrl,
+    this.muted = false,
+    this.showControls = true,
+  });
 
   @override
   State<VideoPlayerWidget> createState() => _VideoPlayerWidgetState();
@@ -39,6 +50,7 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
   @override
   void initState() {
     super.initState();
+    _showControls = widget.showControls;
     _initializePlayer();
   }
 
@@ -67,6 +79,9 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
 
       await _controller!.initialize();
       _controller!.setLooping(true);
+      if (widget.muted) {
+        await _controller!.setVolume(0);
+      }
       if (_branchVisible) {
         _controller!.play();
       }

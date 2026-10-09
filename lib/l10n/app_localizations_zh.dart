@@ -4181,6 +4181,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get ucPreset_disabled => '负面提示词预设已关闭';
 
   @override
+  String artistShowcase_score(Object score) {
+    return '评分 $score';
+  }
+
+  @override
   String get ucPreset_addToNegative => '添加到负面提示词开头:';
 
   @override
@@ -19689,6 +19694,11 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get ucPreset_disabled => '負面提示詞預設已關閉';
+
+  @override
+  String artistShowcase_score(Object score) {
+    return '評分 $score';
+  }
 
   @override
   String get ucPreset_addToNegative => '新增到負面提示詞開頭:';

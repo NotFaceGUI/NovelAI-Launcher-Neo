@@ -1799,6 +1799,12 @@
   "ucPreset_humanFocus": "人物",
   "ucPreset_none": "無",
   "ucPreset_disabled": "負面提示詞預設已關閉",
+  "artistShowcase_score": "評分 {score}",
+  "@artistShowcase_score": {
+    "placeholders": {
+      "score": {}
+    }
+  },
   "ucPreset_addToNegative": "新增到負面提示詞開頭:",
   "ucPreset_nsfwHint": "💡 如需生成成人內容，請在正面提示詞中新增 nsfw，負面提示詞中的 nsfw 將自動移除",
   "ucPreset_addFromLibrary": "從詞庫新增",

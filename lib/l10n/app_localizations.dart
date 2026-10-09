@@ -7789,6 +7789,12 @@ abstract class AppLocalizations {
   /// **'Undesired content preset disabled'**
   String get ucPreset_disabled;
 
+  /// No description provided for @artistShowcase_score.
+  ///
+  /// In en, this message translates to:
+  /// **'Score {score}'**
+  String artistShowcase_score(Object score);
+
   /// No description provided for @ucPreset_addToNegative.
   ///
   /// In en, this message translates to:

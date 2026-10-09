@@ -4260,6 +4260,11 @@ class AppLocalizationsJa extends AppLocalizations {
   String get ucPreset_disabled => '除外したい要素プリセットが無効です';
 
   @override
+  String artistShowcase_score(Object score) {
+    return 'スコア $score';
+  }
+
+  @override
   String get ucPreset_addToNegative => '除外したい要素に追加:';
 
   @override

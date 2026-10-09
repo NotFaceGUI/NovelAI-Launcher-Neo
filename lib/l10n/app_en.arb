@@ -1873,6 +1873,12 @@
   "ucPreset_humanFocus": "Human",
   "ucPreset_none": "None",
   "ucPreset_disabled": "Undesired content preset disabled",
+  "artistShowcase_score": "Score {score}",
+  "@artistShowcase_score": {
+    "placeholders": {
+      "score": {}
+    }
+  },
   "ucPreset_addToNegative": "Add to Undesired Content:",
   "ucPreset_nsfwHint": "💡 To generate adult content, add nsfw to your prompt. The nsfw tag will be auto-removed from Undesired Content",
   "ucPreset_addFromLibrary": "Add from Library",

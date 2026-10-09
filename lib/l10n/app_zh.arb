@@ -1780,6 +1780,12 @@
   "ucPreset_humanFocus": "人物",
   "ucPreset_none": "无",
   "ucPreset_disabled": "负面提示词预设已关闭",
+  "artistShowcase_score": "评分 {score}",
+  "@artistShowcase_score": {
+    "placeholders": {
+      "score": {}
+    }
+  },
   "ucPreset_addToNegative": "添加到负面提示词开头:",
   "ucPreset_nsfwHint": "💡 如需生成成人内容，请在正面提示词中添加 nsfw，负面提示词中的 nsfw 将自动移除",
   "ucPreset_addFromLibrary": "从词库添加",

@@ -467,11 +467,20 @@ class DanbooruApiService {
     int limit = 40,
     dynamic page = 1,
     bool random = false,
+    String? order,
   }) async {
+    // 标签名里的空格转成下划线；`order:` 这类搜索元标签必须在归一化之后
+    // 再拼接，否则会被一起转义成标签名。
+    final normalizedTags = tags?.replaceAll(' ', '_');
+    final query = [
+      if (normalizedTags != null && normalizedTags.isNotEmpty) normalizedTags,
+      if (order != null && order.isNotEmpty) 'order:$order',
+    ].join(' ');
+
     final queryParams = <String, dynamic>{
       'limit': limit.clamp(1, 200),
       'page': page,
-      if (tags != null && tags.isNotEmpty) 'tags': tags.replaceAll(' ', '_'),
+      if (query.isNotEmpty) 'tags': query,
       if (random) 'random': 'true',
     };
 
