@@ -236,6 +236,40 @@ void main() {
     );
   });
 
+  testWidgets('server scaled result keeps comparison entry', (tester) async {
+    // 增强 max 档由服务端等比放大到面积上限，结果比例与来源只差逐边取整，
+    // 边长也不再是 64 的倍数，仍要给出对比入口。
+    final result = _comparisonImage(
+      id: 'server-scaled',
+      resultWidth: 137,
+      resultHeight: 200,
+      sourceWidth: 100,
+      sourceHeight: 146,
+    );
+    final container = ProviderContainer(
+      overrides: [
+        imageGenerationNotifierProvider.overrideWith(
+          () => _SelectionImageGenerationNotifier(
+            ImageGenerationState(displayImages: [result]),
+          ),
+        ),
+        historyClickBehaviorNotifierProvider.overrideWith(
+          _LinkedHistoryBehaviorNotifier.new,
+        ),
+        shortcutConfigNotifierProvider.overrideWith(
+          _DefaultShortcutConfigNotifier.new,
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_app(container));
+    await tester.pumpAndSettle();
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+    expect(find.text(l10n.generation_imageComparison), findsOneWidget);
+  });
+
   testWidgets('missing or mismatched source keeps final-only preview', (
     tester,
   ) async {

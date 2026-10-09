@@ -64,19 +64,41 @@ class ImageComparisonSource {
     return true;
   }
 
-  /// Accepts an exact aspect ratio or NovelAI Enhance's per-edge grid rounding.
+  /// 结果与来源是不是同一构图，可以用来叠图对比。
+  ///
+  /// 精确等比的请求（同尺寸图生图、2 倍超分）直接通过；增强倍率档会把目标
+  /// 尺寸对齐到 64 网格，因此额外接受半格以内的逐边取整；增强 max 档、本地
+  /// 放大器与导入时的 64 对齐由各自环节逐边取整，宽高比会跟着漂移，由
+  /// [_maxRoundingAspectDrift] 兜住。偏差更大说明构图真的变了
+  ///（例如扩图改了画布比例），不能叠图。
   bool isCompatibleWithDimensions(int targetWidth, int targetHeight) {
     if (targetWidth <= 0 || targetHeight <= 0) return false;
     if (width * targetHeight == height * targetWidth) return true;
 
     // Enhance rounds each target edge independently to the nearest 64 pixels.
     const grid = ApiConstants.dimensionGrid;
-    if (targetWidth % grid != 0 || targetHeight % grid != 0) return false;
-    const halfGrid = grid ~/ 2;
-    return (targetWidth - halfGrid) * height <=
-            (targetHeight + halfGrid) * width &&
-        (targetHeight - halfGrid) * width <= (targetWidth + halfGrid) * height;
+    if (targetWidth % grid == 0 && targetHeight % grid == 0) {
+      const halfGrid = grid ~/ 2;
+      if ((targetWidth - halfGrid) * height <=
+              (targetHeight + halfGrid) * width &&
+          (targetHeight - halfGrid) * width <=
+              (targetWidth + halfGrid) * height) {
+        return true;
+      }
+    }
+
+    final sourceRatio = width / height;
+    return (targetWidth / targetHeight - sourceRatio).abs() <=
+        sourceRatio * _maxRoundingAspectDrift;
   }
+
+  /// 逐边独立取整时允许的最大宽高比漂移。
+  ///
+  /// 结果的两条边由不同环节各自取整：导入的源图会按宽高比评分对齐到 64 网格，
+  /// 增强 max 档由服务端等比缩放到面积上限，本地放大器按自己的倍数网格取整。
+  /// 千级边长下这些取整会让宽高比偏离几个百分点，同时要和真正换了构图的比例
+  /// 变化（扩图、拉长画布）拉开距离。
+  static const double _maxRoundingAspectDrift = 0.04;
 }
 
 /// 生成的图像（带唯一ID）

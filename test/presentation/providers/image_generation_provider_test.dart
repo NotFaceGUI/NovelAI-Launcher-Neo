@@ -160,8 +160,23 @@ void main() {
       expect(source.isCompatibleWithDimensions(1664, 2432), isTrue);
       expect(source.isCompatibleWithDimensions(1280, 1792), isTrue);
       expect(source.isCompatibleWithDimensions(1280, 1856), isTrue);
+      // 增强 max 档：服务端等比放大到面积上限，逐边取整后不是 64 的倍数
+      expect(source.isCompatibleWithDimensions(1467, 2144), isTrue);
+      // 本地放大器按自己的倍数网格逐边取整
+      expect(source.isCompatibleWithDimensions(1665, 2433), isTrue);
+      expect(source.isCompatibleWithDimensions(1663, 2431), isTrue);
       expect(source.isCompatibleWithDimensions(1792, 1792), isFalse);
       expect(source.isCompatibleWithDimensions(1280, 2048), isFalse);
+      expect(source.isCompatibleWithDimensions(1408, 1792), isFalse);
+
+      // 导入时源图被对齐过 64 网格，增强结果再逐边取整：两者比例差最明显的
+      // 组合仍要能叠图，构图真的换了才拒绝。
+      final alignedSource = ImageComparisonSource.fromBytes(
+        _validImageBytes(width: 1300, height: 1400),
+      );
+      expect(alignedSource, isNotNull);
+      expect(alignedSource!.isCompatibleWithDimensions(1691, 1860), isTrue);
+      expect(alignedSource.isCompatibleWithDimensions(1000, 1400), isFalse);
 
       final compatible = GeneratedImage.create(
         _validImageBytes(width: 1280, height: 1792),
@@ -556,6 +571,82 @@ void main() {
       expect(images.last.comparisonSource, same(images.first.comparisonSource));
       expect(images.first.comparisonSource!.bytes, orderedEquals(source));
       expect(images.every((image) => image.canCompareWithSource), isTrue);
+    });
+
+    test('enhance max result stays comparable with the source image', () async {
+      final mockApiService = MockNAIImageGenerationApiService();
+      final source = _validImageBytes(width: 832, height: 1216);
+      ImageParams? sentParams;
+
+      when(
+        () => mockApiService.generateImageStream(
+          any(),
+          focusedInpaintEnabled: any(named: 'focusedInpaintEnabled'),
+          minimumContextMegaPixels: any(named: 'minimumContextMegaPixels'),
+          focusedSelectionRect: any(named: 'focusedSelectionRect'),
+        ),
+      ).thenAnswer((invocation) {
+        sentParams = invocation.positionalArguments.first as ImageParams;
+        // max 档：请求仍按原尺寸发，服务端等比放大到面积上限
+        final target = E2eUpscale.resolveMaxEnhanceTargetSize(
+          sentParams!.width,
+          sentParams!.height,
+        );
+        return Stream<ImageStreamChunk>.fromIterable([
+          ImageStreamChunk.complete(
+            _validImageBytes(width: target.width, height: target.height),
+            sampleIndex: 0,
+          ),
+        ]);
+      });
+
+      container.dispose();
+      container = _createAuthenticatedContainer(
+        overrides: [
+          naiImageGenerationApiServiceProvider.overrideWithValue(
+            mockApiService,
+          ),
+          subscriptionNotifierProvider.overrideWith(
+            TestSubscriptionNotifier.new,
+          ),
+        ],
+      );
+      await container
+          .read(notificationSettingsNotifierProvider.notifier)
+          .setSoundEnabled(false);
+      await container
+          .read(imageSaveSettingsNotifierProvider.notifier)
+          .setAutoSave(false);
+      container.read(imagesPerRequestProvider.notifier).set(1);
+      container
+          .read(generationParamsNotifierProvider.notifier)
+          .updateModel(ImageModels.animeDiffusionV5Full, persist: false);
+
+      final workflowNotifier = container.read(
+        imageWorkflowControllerProvider.notifier,
+      );
+      workflowNotifier.replaceSourceImage(source);
+      workflowNotifier.enterEnhanceMode();
+      workflowNotifier.selectEnhanceMaxScale();
+
+      final params = container.read(generationParamsNotifierProvider);
+      expect(params.upscaledEnhance, isTrue);
+      expect(params.width, equals(832));
+      expect(params.height, equals(1216));
+
+      await container
+          .read(imageGenerationNotifierProvider.notifier)
+          .generate(params.copyWith(nSamples: 1));
+
+      final image = container
+          .read(imageGenerationNotifierProvider)
+          .currentImages
+          .single;
+      expect(image.width * image.height, greaterThan(832 * 1216));
+      expect(image.width, equals(1467));
+      expect(image.height, equals(2144));
+      expect(image.comparisonSource?.bytes, orderedEquals(source));
+      expect(image.canCompareWithSource, isTrue);
     });
 
     test(
