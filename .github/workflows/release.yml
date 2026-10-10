@@ -11,7 +11,7 @@ on:
         required: true
         type: string
       build_all_platforms:
-        description: "同时构建 macOS 与 Android（默认只构建 Windows）"
+        description: "额外构建 macOS（Windows 与 Android 始终构建）"
         required: false
         type: boolean
         default: false
@@ -419,8 +419,8 @@ jobs:
 
   build-android:
     name: Build Android
-    # 默认只出 Windows；需要 macOS / Android 安装包时在手动触发时勾选 build_all_platforms。
-    if: ${{ inputs.build_all_platforms == true }}
+    # 正式发布始终带正式签名 APK：应用内更新按 release_manifest.json 里的
+    # android-apk 资产判定新版本，缺了它安卓端收不到更新，所以这里不再按平台开关跳过。
     runs-on: ubuntu-latest
     needs: prepare
     env:
@@ -602,7 +602,7 @@ jobs:
   publish:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
-    # macOS 与 Android 默认被跳过，跳过不等于失败；Windows 必须先构建成功，
+    # Windows 与 Android 必须先构建成功，macOS 可被跳过（跳过不等于失败），
     # 真正跑过的平台也必须成功，避免把不完整的资产当成正式发布。
     if: ${{ always() && needs.prepare.result == 'success' && needs.build-windows.result == 'success' && (needs.build-macos.result == 'success' || needs.build-macos.result == 'skipped') && (needs.build-android.result == 'success' || needs.build-android.result == 'skipped') }}
     needs:
