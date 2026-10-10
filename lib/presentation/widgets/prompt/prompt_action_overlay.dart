@@ -28,16 +28,21 @@ class PromptActionSurface extends StatelessWidget {
 
 /// Measures the real action content before positioning it. Translation length,
 /// text scaling and the keyboard therefore cannot invalidate a fixed height.
+///
+/// [preferBelow] 为真时优先放在锚点下方：触屏上系统选择工具栏会占住选区上方，
+/// 两边压在一起就是"两个气泡"；下方放不下时翻回上方。鼠标端保持原来优先上方。
 class PromptActionOverlay extends StatelessWidget {
   const PromptActionOverlay({
     super.key,
     required this.anchor,
     required this.overlaySize,
     required this.child,
+    this.preferBelow = false,
   });
   final Rect anchor;
   final Size overlaySize;
   final Widget child;
+  final bool preferBelow;
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +63,7 @@ class PromptActionOverlay extends StatelessWidget {
         delegate: _PromptActionLayout(
           anchor,
           Rect.fromLTRB(left, top, right, bottom),
+          preferBelow,
         ),
         child: SingleChildScrollView(
           key: const ValueKey('prompt-action-viewport'),
@@ -69,9 +75,10 @@ class PromptActionOverlay extends StatelessWidget {
 }
 
 class _PromptActionLayout extends SingleChildLayoutDelegate {
-  const _PromptActionLayout(this.anchor, this.bounds);
+  const _PromptActionLayout(this.anchor, this.bounds, this.preferBelow);
   final Rect anchor;
   final Rect bounds;
+  final bool preferBelow;
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
       BoxConstraints(
@@ -80,8 +87,13 @@ class _PromptActionLayout extends SingleChildLayoutDelegate {
       );
   @override
   Offset getPositionForChild(Size size, Size childSize) {
+    final below = anchor.bottom + 6;
     final above = anchor.top - childSize.height - 6;
-    final y = above >= bounds.top ? above : anchor.bottom + 6;
+    final belowFits = below + childSize.height <= bounds.bottom;
+    final aboveFits = above >= bounds.top;
+    final y = preferBelow
+        ? (belowFits ? below : above)
+        : (aboveFits ? above : below);
     return Offset(
       anchor.left.clamp(
         bounds.left,
@@ -96,5 +108,7 @@ class _PromptActionLayout extends SingleChildLayoutDelegate {
 
   @override
   bool shouldRelayout(_PromptActionLayout oldDelegate) =>
-      anchor != oldDelegate.anchor || bounds != oldDelegate.bounds;
+      anchor != oldDelegate.anchor ||
+      bounds != oldDelegate.bounds ||
+      preferBelow != oldDelegate.preferBelow;
 }

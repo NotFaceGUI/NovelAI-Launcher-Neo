@@ -166,30 +166,56 @@ class _ArtistShowcasePreviewState extends ConsumerState<ArtistShowcasePreview> {
   }
 
   /// 卡片锚点：贴着选中标签，取不到几何信息时退回指针位置。
+  ///
+  /// 摆放按全局坐标算，只在软键盘弹起时把可用区域换成"键盘之上、安全区以内"：
+  /// 编辑器可以很高，按它自身范围判断会让卡片落进键盘占住的那一段。没有键盘
+  /// 遮挡时（桌面端、键盘收起）沿用编辑器自身范围，摆放与原来一致。
   Offset _resolveAnchor() {
     final targetBox = _targetKey.currentContext?.findRenderObject();
     if (targetBox is! RenderBox) return Offset.zero;
 
-    final global = _selectionAnchor() ?? _lastPointer;
-    final local = global == null
-        ? const Offset(24, 24)
-        : targetBox.globalToLocal(global);
-    final size = targetBox.size;
+    // 编辑器拿到的 MediaQuery 已经消费掉键盘高度，这里取上层那一份。
+    final media = MediaQuery.of(Scaffold.maybeOf(context)?.context ?? context);
+    final keyboardUp = media.viewInsets.bottom > 0;
+    final bounds = keyboardUp
+        ? Rect.fromLTRB(
+            media.padding.left,
+            media.padding.top,
+            media.size.width - media.padding.right,
+            media.size.height -
+                math.max(media.padding.bottom, media.viewInsets.bottom),
+          )
+        : (targetBox.localToGlobal(Offset.zero) & targetBox.size);
+    final cardHeight = keyboardUp
+        ? ArtistShowcaseCard.estimatedHeightFor(_showcase)
+        : 210.0;
+
+    final selection = _selectionAnchor() ?? _lastPointer;
+    if (selection == null) return targetBox.globalToLocal(bounds.topLeft + const Offset(24, 24));
+
     const gap = 14.0;
-    const estimatedHeight = 210.0;
+    const cardWidth = ArtistShowcaseCard.cardWidth;
 
-    final fitsRight =
-        local.dx + gap + ArtistShowcaseCard.cardWidth <= size.width;
+    final fitsRight = selection.dx + gap + cardWidth <= bounds.right;
     final preferredX = fitsRight
-        ? local.dx + gap
-        : local.dx - ArtistShowcaseCard.cardWidth - gap;
-    final maxX = math.max(0.0, size.width - ArtistShowcaseCard.cardWidth);
-    final fitsBelow = local.dy + 18 + estimatedHeight <= size.height;
-    final preferredY = fitsBelow
-        ? local.dy + 18
-        : math.max(0.0, local.dy - estimatedHeight - 10);
+        ? selection.dx + gap
+        : selection.dx - cardWidth - gap;
 
-    return Offset(preferredX.clamp(0.0, maxX), preferredY);
+    final below = selection.dy + 18;
+    final above = selection.dy - cardHeight - 10;
+    final y = below + cardHeight <= bounds.bottom
+        ? below
+        : math.max(bounds.top, above);
+
+    return targetBox.globalToLocal(
+      Offset(
+        preferredX.clamp(
+          bounds.left,
+          math.max(bounds.left, bounds.right - cardWidth),
+        ),
+        y,
+      ),
+    );
   }
 
   /// 选中范围的右下角全局坐标，用于把卡片贴在标签旁边。

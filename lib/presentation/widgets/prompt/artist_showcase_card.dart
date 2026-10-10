@@ -40,13 +40,31 @@ class ArtistShowcaseCard extends StatelessWidget {
 
   static const double cardWidth = 236;
 
+  /// 信息行（标签名 + 评分）的高度保守估计；卡片其余部分由图片区决定。
+  static const double infoHeightEstimate = 46;
+
+  /// 图片区宽高比：与卡片布局共用同一份夹取规则，外部估算高度时不会走偏。
+  static double imageAspectRatio(ArtistShowcase showcase) =>
+      showcase.width > 0 && showcase.height > 0
+      ? (showcase.width / showcase.height).clamp(0.72, 1.5)
+      : 1.0;
+
+  /// 卡片高度估算：摆放卡片时用来判断锚点下方还放不放得下。
+  ///
+  /// 比例未知时按最高的一档估算——宁可翻到上方，也不让卡片压住键盘。
+  static double estimatedHeightFor(ArtistShowcase? showcase) {
+    final ratio =
+        showcase == null || showcase.width <= 0 || showcase.height <= 0
+        ? 0.72
+        : (showcase.width / showcase.height).clamp(0.72, 1.5);
+    return cardWidth / ratio + infoHeightEstimate;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final ratio = showcase.width > 0 && showcase.height > 0
-        ? (showcase.width / showcase.height).clamp(0.72, 1.5)
-        : 1.0;
+    final ratio = imageAspectRatio(showcase);
 
     return Material(
       color: colors.surfaceContainerHigh,

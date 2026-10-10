@@ -392,6 +392,8 @@ class _WeightAdjustToolbar extends StatelessWidget {
     return PromptActionOverlay(
       anchor: caretRect,
       overlaySize: overlaySize,
+      // 触屏上系统选择工具栏占着选区上方，浮层改走下方；鼠标端维持优先上方。
+      preferBelow: context.interactionPolicy.prefersTouchPresentation,
       child: TextFieldTapRegion(
         child: Listener(
           onPointerDown: (_) => onInteractingChanged(true),

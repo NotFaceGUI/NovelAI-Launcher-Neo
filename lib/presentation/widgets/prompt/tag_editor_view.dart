@@ -630,6 +630,8 @@ class _TagEditorViewState extends ConsumerState<TagEditorView> {
     return PromptActionOverlay(
       anchor: anchor,
       overlaySize: info.overlaySize,
+      // 触屏上系统选择工具栏占着选区上方，浮层改走下方；鼠标端维持优先上方。
+      preferBelow: context.interactionPolicy.prefersTouchPresentation,
       child: TapRegion(
         groupId: session,
         child: TextFieldTapRegion(
