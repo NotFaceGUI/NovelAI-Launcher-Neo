@@ -13,11 +13,13 @@ import '../../../core/utils/localization_extension.dart';
 import '../../../data/models/queue/replication_task.dart';
 import '../../../data/models/queue/replication_task_generation_snapshot.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/generation/generation_center_mode_provider.dart';
 import '../../providers/image_generation_provider.dart';
 import '../../providers/krita/krita_bridge_notifier.dart';
 import '../../providers/mobile_shell_overlay_provider.dart';
 import '../../providers/prompt_maximize_provider.dart';
 import '../../providers/replication_queue_provider.dart';
+import '../../providers/storyboard/storyboard_toolbar_actions.dart';
 import '../../utils/asset_protection_guard.dart';
 import '../../widgets/common/app_toast.dart';
 
@@ -119,12 +121,29 @@ class MobileGenerationController extends ChangeNotifier
     notifyListeners();
   }
 
-  void handleBack(bool isPromptMaximized) {
+  void handleBack({
+    required bool isPromptMaximized,
+    required bool isStoryboardMode,
+  }) {
     if (agentFullScreen) {
       handleAgentBack();
     } else if (isPromptMaximized) {
       closePromptEditor();
+    } else if (isStoryboardMode) {
+      unawaited(leaveStoryboard());
     }
+  }
+
+  /// 返回键退出分镜；与工具条退出按钮共用同一条动作（先落盘再回预览）。
+  Future<void> leaveStoryboard() =>
+      ref.read(storyboardToolbarActionsProvider).leaveEditor();
+
+  /// 切换中央工作区视图（预图预览 / 无限画布 / 分镜）。
+  ///
+  /// 移动端把入口放在顶栏，切视图时收起正在输入的焦点，避免软键盘留在屏幕上。
+  void showCenterMode(GenerationCenterMode mode) {
+    FocusManager.instance.primaryFocus?.unfocus();
+    ref.read(generationCenterModeControllerProvider.notifier).show(mode);
   }
 
   void handleAgentBack() {
@@ -171,6 +190,11 @@ class MobileGenerationController extends ChangeNotifier
     return !keyboardVisible &&
         !agentFullScreen &&
         !ref.read(promptMaximizeNotifierProvider) &&
+        // 画布与分镜自己消费拖拽（平移视口、移动/拉框分镜），它们不是 Scrollable，
+        // 给不出滚动通知，因此这里必须按模式让位：否则平移画布会被当成上下滑，
+        // 顺手把 Agent 或提示词编辑器拉起来。
+        ref.read(generationCenterModeControllerProvider) ==
+            GenerationCenterMode.preview &&
         ref.read(mobileShellOverlayNotifierProvider).isEmpty &&
         (ModalRoute.of(context)?.isCurrent ?? true) &&
         scaffold?.isDrawerOpen != true &&

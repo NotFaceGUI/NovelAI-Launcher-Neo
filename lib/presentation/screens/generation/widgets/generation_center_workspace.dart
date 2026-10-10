@@ -18,7 +18,13 @@ import 'image_preview.dart';
 ///
 /// 非预览模式各自的工具条里带退出入口，所以这里的入口控件只在预览时出现。
 class GenerationCenterWorkspace extends ConsumerStatefulWidget {
-  const GenerationCenterWorkspace({super.key});
+  const GenerationCenterWorkspace({super.key, this.showModeSwitch = true});
+
+  /// 是否在预览区左上角浮出模式入口。
+  ///
+  /// 移动端把这两个入口放进顶栏（与参数、Agent、历史同排），浮层按钮会压住画布，
+  /// 因此由布局方关掉它；桌面经典布局与官网式布局仍用浮层入口。
+  final bool showModeSwitch;
 
   @override
   ConsumerState<GenerationCenterWorkspace> createState() =>
@@ -87,7 +93,7 @@ class _GenerationCenterWorkspaceState
                   horizontalOffset: _offsetFor(entry.key, progress),
                   visibility: _visibilityFor(entry.key, progress),
                 ),
-            if (switchOpacity > 0.001)
+            if (switchOpacity > 0.001 && widget.showModeSwitch)
               Positioned(
                 top: 12,
                 left: 12,

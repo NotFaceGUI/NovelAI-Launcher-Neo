@@ -8,6 +8,7 @@ import '../../../data/models/image/image_params.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/character_prompt_provider.dart';
 import '../../providers/fixed_tags_provider.dart';
+import '../../providers/generation/generation_center_mode_provider.dart';
 import '../../providers/generation/image_workflow_controller.dart';
 import '../../providers/image_generation_provider.dart';
 import '../../providers/krita/krita_bridge_notifier.dart';
@@ -84,6 +85,8 @@ class _MobileGenerationLayoutState
         ? ref.watch(kritaBridgeNotifierProvider).isBridgeGenerating
         : false;
     final isPromptMaximized = ref.watch(promptMaximizeNotifierProvider);
+    final centerMode = ref.watch(generationCenterModeControllerProvider);
+    final isStoryboardMode = centerMode == GenerationCenterMode.storyboard;
     final showRandomTools = ref.watch(randomPromptToolsVisibilityProvider);
     final isUpscaleMode = ref.watch(
       imageWorkflowControllerProvider.select((workflow) => workflow.isUpscale),
@@ -140,6 +143,8 @@ class _MobileGenerationLayoutState
           generationState: generationState,
           cooldownRemainingSeconds: cooldownState.remainingSeconds,
           isPromptMaximized: isPromptMaximized,
+          isStoryboardMode: isStoryboardMode,
+          isPreviewMode: centerMode == GenerationCenterMode.preview,
           keyboardVisible: keyboardVisible,
           isGenerating: isGenerating,
           isLauncherGenerating: isLauncherGenerating,

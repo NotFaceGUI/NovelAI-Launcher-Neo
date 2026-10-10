@@ -8,11 +8,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/storyboard/storyboard_geometry.dart';
 import '../../../data/models/storyboard/storyboard_page.dart';
 import '../../../data/models/storyboard/storyboard_panel.dart';
+import '../generation/generation_center_mode_provider.dart';
 import 'storyboard_document_controller.dart';
 
-/// 分镜工具条上的自动排版动作。
+/// 分镜编辑器上的整体动作：版面几何的自动排版，以及退出编辑器。
 ///
-/// 这些动作改的是版面几何（新增一个矩形 / 延伸一个分镜），不涉及生成。
+/// 退出是工具条按钮与 Android 返回键共用的同一条路径，放在这里避免两处各写
+/// 一遍「先落盘再回预览」，任何一处漏了落盘都会丢掉防抖窗口内的修改。
 class StoryboardToolbarActions {
   StoryboardToolbarActions(this._ref);
 
@@ -101,6 +103,12 @@ class StoryboardToolbarActions {
     _document.beginGesture();
     _document.setPanelRect(panelId, newRect);
     return newRect;
+  }
+
+  /// 退出分镜编辑器：先把防抖窗口内的修改落盘，再回到图像预览。
+  Future<void> leaveEditor() async {
+    await _document.flush();
+    _ref.read(generationCenterModeControllerProvider.notifier).showPreview();
   }
 }
 

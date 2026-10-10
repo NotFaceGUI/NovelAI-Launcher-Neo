@@ -69,7 +69,8 @@ class _MobileGenerationWorkspaceState extends State<MobileGenerationWorkspace> {
                   pointerExclusionKeys: [_collapsedPromptLauncherKey],
                   pointerActive: controller.workspacePointerActive,
                   dragOffset: controller.workspaceDragFeedback,
-                  showHint: controller.showGestureHint,
+                  // 画布/分镜模式不响应这套快捷手势，提示自然也不该出现。
+                  showHint: controller.showGestureHint && data.isPreviewMode,
                   child: LayoutBuilder(
                     key: const ValueKey('generation-workspace'),
                     builder: (context, constraints) {
@@ -88,7 +89,9 @@ class _MobileGenerationWorkspaceState extends State<MobileGenerationWorkspace> {
                           children: [
                             const Expanded(
                               flex: 6,
-                              child: GenerationCenterWorkspace(),
+                              child: GenerationCenterWorkspace(
+                                showModeSwitch: false,
+                              ),
                             ),
                             VerticalDivider(
                               width: 1,
@@ -136,7 +139,11 @@ class _MobileGenerationWorkspaceState extends State<MobileGenerationWorkspace> {
                               ),
                             ),
                           ),
-                          const Expanded(child: GenerationCenterWorkspace()),
+                          const Expanded(
+                            child: GenerationCenterWorkspace(
+                              showModeSwitch: false,
+                            ),
+                          ),
                           if (data.generationState.isGenerating)
                             MobileGenerationProgress(
                               progress: data.generationState.progress,

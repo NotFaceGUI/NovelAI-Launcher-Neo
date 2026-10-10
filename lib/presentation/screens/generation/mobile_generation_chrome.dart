@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/utils/localization_extension.dart';
 import '../../adaptive/window_size_class.dart';
 import '../../agent_chat/widgets/agent_chat_entry_button.dart';
+import '../../providers/generation/generation_center_mode_provider.dart';
 import '../../providers/image_generation_provider.dart';
 import '../../themes/design_tokens.dart';
 import '../../widgets/anlas/anlas_balance_chip.dart';
@@ -34,8 +35,9 @@ class MobileGenerationChrome extends ConsumerWidget {
   final OwnedViewportOffset historyViewport;
   final Widget body;
 
-  PreferredSizeWidget? _buildAppBar(BuildContext context) {
+  PreferredSizeWidget? _buildAppBar(BuildContext context, WidgetRef ref) {
     if (controller.agentFullScreen) return null;
+    final centerMode = ref.watch(generationCenterModeControllerProvider);
     return AppBar(
       automaticallyImplyLeading: false,
       leading: data.isPromptMaximized
@@ -70,6 +72,24 @@ class MobileGenerationChrome extends ConsumerWidget {
       actions: data.isPromptMaximized
           ? null
           : [
+              // 视图入口紧挨标题，与右侧的参数/Agent/历史分开：前者切中央工作区，
+              // 后者开面板。放在顶栏后不再有浮层压住画布。
+              _CenterModeAction(
+                key: const ValueKey('generation-center-mode-canvas'),
+                icon: Icons.auto_awesome_motion_outlined,
+                tooltip: context.l10n.infinite_canvas_open,
+                selected: centerMode == GenerationCenterMode.canvas,
+                onPressed: () =>
+                    controller.showCenterMode(GenerationCenterMode.canvas),
+              ),
+              _CenterModeAction(
+                key: const ValueKey('generation-center-mode-storyboard'),
+                icon: Icons.dashboard_customize_outlined,
+                tooltip: context.l10n.storyboard_open,
+                selected: centerMode == GenerationCenterMode.storyboard,
+                onPressed: () =>
+                    controller.showCenterMode(GenerationCenterMode.storyboard),
+              ),
               IconButton(
                 key: const ValueKey('generation-parameters-drawer-action'),
                 icon: const Icon(Icons.tune_rounded),
@@ -238,9 +258,37 @@ class MobileGenerationChrome extends ConsumerWidget {
       scaffoldKey: controller.scaffoldKey,
       drawer: _buildParameterDrawer(context),
       endDrawer: _buildHistoryDrawer(context),
-      appBar: _buildAppBar(context),
+      appBar: _buildAppBar(context, ref),
       body: body,
       bottomNavigationBar: _buildBottomBar(context, ref),
+    );
+  }
+}
+
+/// 顶栏里的中央工作区入口；选中态用主色标出当前视图。
+class _CenterModeAction extends StatelessWidget {
+  const _CenterModeAction({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return IconButton(
+      icon: Icon(icon),
+      tooltip: tooltip,
+      isSelected: selected,
+      color: selected ? scheme.primary : null,
+      onPressed: onPressed,
     );
   }
 }

@@ -28,9 +28,18 @@ class MobileGenerationShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PopScope<void>(
-      canPop: !data.isPromptMaximized && !controller.agentFullScreen,
+      // 分镜编辑器同样先吃掉返回键：它与预览共用一块工作区，返回等同于退出分镜。
+      canPop:
+          !data.isPromptMaximized &&
+          !data.isStoryboardMode &&
+          !controller.agentFullScreen,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) controller.handleBack(data.isPromptMaximized);
+        if (!didPop) {
+          controller.handleBack(
+            isPromptMaximized: data.isPromptMaximized,
+            isStoryboardMode: data.isStoryboardMode,
+          );
+        }
       },
       child: MobileGenerationChrome(
         controller: controller,

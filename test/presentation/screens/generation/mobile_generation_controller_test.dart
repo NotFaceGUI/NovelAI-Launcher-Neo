@@ -11,6 +11,7 @@ import 'package:nai_launcher/data/models/image/image_params.dart';
 import 'package:nai_launcher/data/models/queue/replication_task.dart';
 import 'package:nai_launcher/data/models/queue/replication_task_generation_snapshot.dart';
 import 'package:nai_launcher/presentation/providers/auth_provider.dart';
+import 'package:nai_launcher/presentation/providers/generation/generation_center_mode_provider.dart';
 import 'package:nai_launcher/presentation/providers/replication_queue_provider.dart';
 import 'package:nai_launcher/presentation/providers/image_generation_provider.dart';
 import 'package:nai_launcher/presentation/providers/prompt_maximize_provider.dart';
@@ -211,6 +212,60 @@ void main() {
     expect(find.text('LOGIN_SCREEN_OPENED'), findsOneWidget);
     expect(find.text('请输入提示词'), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('画布模式下的上下滑不再打开 Agent 与提示词', (tester) async {
+    final storage = _MemoryLocalStorageService({
+      StorageKeys.mobileGenerationGestureHintCompleted: true,
+    });
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          localStorageServiceProvider.overrideWith((ref) => storage),
+        ],
+        child: const MaterialApp(
+          locale: Locale('zh'),
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          home: _ControllerHarness(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final scope = ProviderScope.containerOf(
+      tester.element(find.byType(_ControllerHarness)),
+    );
+    final controller = tester
+        .state<_ControllerHarnessState>(find.byType(_ControllerHarness))
+        ._controller;
+    final context = tester.element(find.byType(_ControllerHarness));
+
+    // 预览模式：上滑打开 Agent，下滑打开提示词编辑器。
+    controller.handleWorkspacePointerDown(
+      context,
+      const PointerDownEvent(pointer: 1, position: Offset.zero),
+    );
+    controller.handleWorkspacePointerUp(
+      const PointerUpEvent(pointer: 1, position: Offset(0, -140)),
+    );
+    expect(controller.agentFullScreen, isTrue);
+    controller.closeAgentChat();
+
+    // 画布模式：同一段手势归画布自己消费，不能再顺手拉开面板。
+    scope
+        .read(generationCenterModeControllerProvider.notifier)
+        .show(GenerationCenterMode.canvas);
+    await tester.pump();
+    controller.handleWorkspacePointerDown(
+      context,
+      const PointerDownEvent(pointer: 2, position: Offset.zero),
+    );
+    controller.handleWorkspacePointerUp(
+      const PointerUpEvent(pointer: 2, position: Offset(0, -140)),
+    );
+    expect(controller.agentFullScreen, isFalse);
+    expect(controller.workspacePointerActive, isFalse);
   });
 }
 
