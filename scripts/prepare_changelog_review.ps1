@@ -10,6 +10,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# git 的输出是 UTF-8：按控制台默认代码页（例如 GBK）解码会把提交信息与 diff 里的
+# 中文变成乱码，写进审查材料后无法阅读。这里显式按 UTF-8 解码与编码。
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
 function Invoke-Git {
   param(
     [Parameter(Mandatory = $true)]
