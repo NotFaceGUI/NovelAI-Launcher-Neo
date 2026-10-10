@@ -79,6 +79,9 @@ class SelectableImageCard extends ConsumerStatefulWidget {
     this.focusedPreviewPlacement,
     this.imageWidth,
     this.imageHeight,
+    this.footer,
+    this.surfaceWrapper,
+    this.showTouchMoreButton = true,
   }) : assert(
          !isGenerating || (imageWidth != null && imageHeight != null),
          'imageWidth and imageHeight are required when isGenerating is true',
@@ -139,6 +142,21 @@ class SelectableImageCard extends ConsumerStatefulWidget {
   final FocusedStreamPreviewPlacement? focusedPreviewPlacement;
   final int? imageWidth;
   final int? imageHeight;
+
+  /// 图片下方固定呈现的页脚（预览页用来放信息条）。
+  ///
+  /// 页脚留在卡片的动作作用域内，页脚上的入口与图片浮层按钮打开同一份动作列表；
+  /// 给出页脚时卡片按「图片占剩余高度 + 页脚自身高度」分配，调用方需要给卡片
+  /// 一个有界高度。
+  final Widget? footer;
+
+  /// 只包裹图片表面的包装器（预览页用它挂拖拽反馈）。
+  ///
+  /// 页脚不参与包裹：从信息条上拖动不应被当成拖出图片。
+  final Widget Function(Widget child)? surfaceWrapper;
+
+  /// 触屏端是否保留浮在图片上的「更多操作」按钮。
+  final bool showTouchMoreButton;
 
   @override
   ConsumerState<SelectableImageCard> createState() =>
@@ -282,25 +300,37 @@ class _SelectableImageCardState extends ConsumerState<SelectableImageCard>
           : null,
       actions: actions,
       enabled: false,
-      builder: (context, boundActions) => ImageCardSurface(
-        data: data,
-        capabilities: capabilities,
-        controller: _controller,
-        actions: boundActions,
-        onWarmShareCache: coordinator.warmShareTransferCache,
-        onShowContextMenu: (position) {
-          final batch = ImageCardBatchScope.maybeOf(context);
-          final useBatch =
-              batch?.targetIds.contains(widget.imageIdentity) ?? false;
-          return ImageCardContextMenu.show(
-            context: context,
-            position: position,
-            actions: useBatch ? batch!.actions : boundActions,
-            title: useBatch ? batch!.title(context) : null,
-            listenable: useBatch ? batch!.runner : null,
-          );
-        },
-      ),
+      builder: (context, boundActions) {
+        final surface = ImageCardSurface(
+          data: data,
+          capabilities: capabilities,
+          controller: _controller,
+          actions: boundActions,
+          showTouchMoreButton: widget.showTouchMoreButton,
+          onWarmShareCache: coordinator.warmShareTransferCache,
+          onShowContextMenu: (position) {
+            final batch = ImageCardBatchScope.maybeOf(context);
+            final useBatch =
+                batch?.targetIds.contains(widget.imageIdentity) ?? false;
+            return ImageCardContextMenu.show(
+              context: context,
+              position: position,
+              actions: useBatch ? batch!.actions : boundActions,
+              title: useBatch ? batch!.title(context) : null,
+              listenable: useBatch ? batch!.runner : null,
+            );
+          },
+        );
+        final wrapped = widget.surfaceWrapper?.call(surface) ?? surface;
+        final footer = widget.footer;
+        // 页脚与图片共用一个动作作用域：信息条里的入口与浮层按钮打开的是同一份
+        // 动作列表。Expanded 让图片吃掉除页脚之外的高度，调用方只要给卡片一个
+        // 有界高度即可。
+        if (footer == null) return wrapped;
+        return Column(
+          children: [Expanded(child: wrapped), footer],
+        );
+      },
     );
   }
 }

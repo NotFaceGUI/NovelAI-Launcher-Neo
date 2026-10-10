@@ -78,7 +78,9 @@ class _ImageCardActionRegionState extends State<ImageCardActionRegion> {
             : null,
         child: ImageCardActionPresentationScope(
           runner: _runner,
-          menuActions: useBatch ? menuActions : null,
+          // 菜单动作始终暴露：卡片浮层、图片下方信息条等入口取到的是同一份已绑定
+          // 动作，从哪个入口打开都不会与右键路径不一致。
+          menuActions: menuActions,
           menuTitle: title,
           menuRunner: useBatch ? batch!.runner : _runner,
           onMenuOpened: widget.onMenuOpened,

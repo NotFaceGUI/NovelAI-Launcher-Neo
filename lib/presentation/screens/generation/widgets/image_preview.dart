@@ -682,23 +682,20 @@ class _ImagePreviewWidgetState extends ConsumerState<ImagePreviewWidget> {
               : 0,
         );
 
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: cardSize.width,
-              height: cardSize.height,
-              child: _buildGeneratedImageCard(
-                context: context,
-                ref: ref,
-                image: image,
-                showIndex: false,
-                comparisonEnabled: comparisonEnabled,
-              ),
-            ),
-            SizedBox(height: gap),
-            SizedBox(
-              width: cardSize.width,
+        return SizedBox(
+          width: cardSize.width,
+          height: cardSize.height + gap + PreviewInfoBar.heightFor(context),
+          child: _buildGeneratedImageCard(
+            context: context,
+            ref: ref,
+            image: image,
+            showIndex: false,
+            comparisonEnabled: comparisonEnabled,
+            // 信息条交给卡片当页脚：它与图片共用同一份动作列表，触屏「更多操作」
+            // 因此能从信息条打开同一个菜单，图片上不再有浮层按钮。
+            showTouchMoreButton: false,
+            footer: Padding(
+              padding: EdgeInsets.only(top: gap),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: PreviewInfoBar(
@@ -717,7 +714,7 @@ class _ImagePreviewWidgetState extends ConsumerState<ImagePreviewWidget> {
                 ),
               ),
             ),
-          ],
+          ),
         );
       },
     );
@@ -730,6 +727,8 @@ class _ImagePreviewWidgetState extends ConsumerState<ImagePreviewWidget> {
     required bool showIndex,
     int? index,
     bool comparisonEnabled = false,
+    Widget? footer,
+    bool showTouchMoreButton = true,
   }) {
     final imageBytes = image.bytes;
     final canUseAsInput = image.canUseAsGenerationInput;
@@ -865,23 +864,24 @@ class _ImagePreviewWidgetState extends ConsumerState<ImagePreviewWidget> {
       onSaveToLibrary: canUseAsInput
           ? (bytes, _) => _showSaveToLibraryDialog(context, bytes)
           : null,
+      showTouchMoreButton: showTouchMoreButton,
+      footer: footer,
+      // 拖拽只包住图片本身：页脚（信息条）上的拖动不应该被当成拖出图片。
+      surfaceWrapper: image.canDrag
+          ? (child) => DraggableMemoryImage(
+              imageId: image.id,
+              imageBytes: imageBytes,
+              feedbackPixelWidth: image.width,
+              feedbackPixelHeight: image.height,
+              feedbackFormat: 'PNG',
+              fileName: _previewImageFileName(image),
+              sourceFilePath: image.filePath,
+              enabled: !comparisonEnabled,
+              child: child,
+            )
+          : null,
     );
-
-    if (!image.canDrag) {
-      return card;
-    }
-
-    return DraggableMemoryImage(
-      imageId: image.id,
-      imageBytes: imageBytes,
-      feedbackPixelWidth: image.width,
-      feedbackPixelHeight: image.height,
-      feedbackFormat: 'PNG',
-      fileName: _previewImageFileName(image),
-      sourceFilePath: image.filePath,
-      enabled: !comparisonEnabled,
-      child: card,
-    );
+    return card;
   }
 
   String _previewImageFileName(GeneratedImage image) {

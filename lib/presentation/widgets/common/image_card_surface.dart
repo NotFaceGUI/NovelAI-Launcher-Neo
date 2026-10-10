@@ -26,6 +26,7 @@ class ImageCardSurface extends StatelessWidget {
     required this.actions,
     required this.onShowContextMenu,
     required this.onWarmShareCache,
+    this.showTouchMoreButton = true,
   });
 
   final ImageCardViewData data;
@@ -34,6 +35,12 @@ class ImageCardSurface extends StatelessWidget {
   final List<ImageCardAction> actions;
   final Future<void> Function(Offset position) onShowContextMenu;
   final VoidCallback onWarmShareCache;
+
+  /// 触屏端是否把「更多操作」按钮浮在图片上。
+  ///
+  /// 预览页把这个入口移到图片下方的信息条里，避免浮层压住画面；其余卡片继续
+  /// 使用浮层按钮。
+  final bool showTouchMoreButton;
 
   @override
   Widget build(BuildContext context) {
@@ -214,7 +221,8 @@ class ImageCardSurface extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (context.interactionPolicy.usesTouchActionMenu &&
+              if (showTouchMoreButton &&
+                  context.interactionPolicy.usesTouchActionMenu &&
                   (!controller.isHovering ||
                       context.interactionPolicy.prefersTouchPresentation) &&
                   capabilities.enableContextMenu &&

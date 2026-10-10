@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:nai_launcher/presentation/widgets/common/horizontal_action_strip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,22 +8,21 @@ import '../../../../core/utils/localization_extension.dart';
 import '../../../../data/models/canvas/canvas_node.dart';
 import '../../../../data/models/canvas/canvas_node_params.dart';
 import '../../../../data/models/gallery/nai_image_metadata.dart';
-import '../../../../data/models/image/image_params.dart'
-    show ImageParamsExtension;
 import '../../../adaptive/interaction_policy.dart';
 import '../../../providers/generation/generated_image_metadata_provider.dart';
 import '../../../providers/image_generation_provider.dart';
 import '../../../providers/preview_transparency_provider.dart';
+import '../../../widgets/common/image_card_action_region.dart';
+import '../../../widgets/common/image_card_context_menu.dart';
 import '../../../widgets/common/transparency_background.dart';
 import '../../../widgets/image_editor/widgets/color_picker.dart';
 import '../canvas/canvas_actions.dart';
-import 'generation_toggle_button.dart';
 
 /// 预览图下方的信息条（对齐官网结果区底部的 display/save 工具条）
 ///
 /// 自左向右：分辨率胶囊 → 透明底色入口 → 可选对比开关 → 种子胶囊。
-/// 透明底色入口向上弹出档位浮层；触屏设备在支持的模型下把生成用的
-/// 透明背景开关固定在最右侧，避免用户必须进入提示词编辑页。
+/// 透明底色入口向上弹出档位浮层；触屏设备把「更多操作」放在最右侧，与图片浮层
+/// 按钮共用同一份动作列表，浮层按钮因此不再压在画面上。
 class PreviewInfoBar extends ConsumerWidget {
   final GeneratedImage image;
   final bool comparisonEnabled;
@@ -44,7 +45,6 @@ class PreviewInfoBar extends ConsumerWidget {
   /// 低于该宽度就收起分辨率胶囊（官网在窄容器下同样隐藏它）
   static const double _resolutionMinWidth = 300;
   static const double _comparisonResolutionMinWidth = 400;
-  static const double _transparentToggleResolutionMinWidth = 400;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -53,25 +53,13 @@ class PreviewInfoBar extends ConsumerWidget {
         .watch(generatedImageMetadataProvider(image))
         .valueOrNull;
     final seed = metadata?.seed;
-    final transparentBackground = ref.watch(
-      generationParamsNotifierProvider.select(
-        (params) => (
-          supported: params.capabilities.supportsTransparentBackground,
-          enabled: params.transparentBackground,
-        ),
-      ),
-    );
-    final showTransparentBackground =
-        context.interactionPolicy.touchAvailable &&
-        transparentBackground.supported;
+    final showMoreActions = context.interactionPolicy.usesTouchActionMenu;
 
     return SizedBox(
       height: heightFor(context),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final resolutionMinWidth = showTransparentBackground
-              ? _transparentToggleResolutionMinWidth
-              : onComparisonChanged == null
+          final resolutionMinWidth = onComparisonChanged == null
               ? _resolutionMinWidth
               : _comparisonResolutionMinWidth;
           final showResolution =
@@ -125,33 +113,51 @@ class PreviewInfoBar extends ConsumerWidget {
                     ],
                   ),
                 );
-          if (!showTransparentBackground) return info;
+          if (!showMoreActions) return info;
 
           return Row(
             children: [
               Expanded(child: info),
               const SizedBox(width: 6),
-              Semantics(
-                button: true,
-                toggled: transparentBackground.enabled,
-                label: context.l10n.generation_transparentBackground,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: barHeight),
-                  child: GenerationToggleButton(
-                    key: const ValueKey(
-                      'generation_preview_transparent_background_toggle',
-                    ),
-                    label: context.l10n.generation_transparentBackground,
-                    isEnabled: transparentBackground.enabled,
-                    onChanged: (value) => ref
-                        .read(generationParamsNotifierProvider.notifier)
-                        .updateTransparentBackground(value),
-                  ),
-                ),
-              ),
+              const _MoreActionsButton(),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// 「更多操作」入口。
+///
+/// 动作取自卡片动作作用域，与长按/右键路径是同一份已绑定列表，因此菜单内容与
+/// 卡片完全一致；入口放在信息条里，图片上不再有浮层按钮压住画面。
+class _MoreActionsButton extends StatelessWidget {
+  const _MoreActionsButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final scope = ImageCardActionPresentationScope.maybeOf(context);
+    final actions = scope?.menuActions;
+    if (scope == null || actions == null || actions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Semantics(
+      button: true,
+      label: context.l10n.common_moreActions,
+      child: _InfoPill(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        tooltip: context.l10n.common_moreActions,
+        onTap: () => unawaited(
+          ImageCardContextMenu.show(
+            context: context,
+            position: Offset.zero,
+            actions: actions,
+            title: scope.menuTitle,
+            listenable: scope.menuRunner,
+          ),
+        ),
+        child: const Icon(Icons.more_horiz_rounded, size: 16),
       ),
     );
   }
