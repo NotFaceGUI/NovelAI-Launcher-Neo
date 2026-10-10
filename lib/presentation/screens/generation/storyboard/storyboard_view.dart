@@ -5,10 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../providers/storyboard/storyboard_editor_bridge.dart';
 import '../../../../core/utils/localization_extension.dart';
-import '../../../providers/generation/generation_center_mode_provider.dart';
 import '../../../providers/generation/generation_params_notifier.dart';
 import '../../../providers/storyboard/storyboard_document_controller.dart';
 import '../../../providers/storyboard/storyboard_interaction_provider.dart';
+import '../../../providers/storyboard/storyboard_toolbar_actions.dart';
 import '../../../themes/core/layered_surface_style.dart';
 import 'storyboard_canvas.dart';
 import 'storyboard_toolbar.dart';
@@ -31,6 +31,12 @@ class StoryboardView extends ConsumerStatefulWidget {
   /// 属性栏的最大高度；内容超出时内部滚动。
   static const double inspectorMaxHeight = 420;
 
+  /// 窄于该宽度时工具条占满整行，页面信息 chip 让到左下角。
+  ///
+  /// 触屏上工具条固定 48×48 命中区，十一项加分隔线约 600 逻辑像素：
+  /// 只有比这更宽的视口才放得下「工具条 + chip」并排。
+  static const double pageChipDockBreakpoint = 640;
+
   @override
   ConsumerState<StoryboardView> createState() => _StoryboardViewState();
 }
@@ -47,10 +53,7 @@ class _StoryboardViewState extends ConsumerState<StoryboardView> {
   Future<void> _leave() async {
     if (_leaving) return;
     setState(() => _leaving = true);
-    // 防抖窗口内的修改必须先落盘，否则用户刚排好的版会在切换后丢失。
-    await ref.read(storyboardDocumentControllerProvider.notifier).flush();
-    if (!mounted) return;
-    ref.read(generationCenterModeControllerProvider.notifier).showPreview();
+    await ref.read(storyboardToolbarActionsProvider).leaveEditor();
     if (mounted) setState(() => _leaving = false);
   }
 
@@ -187,6 +190,7 @@ class _StoryboardViewState extends ConsumerState<StoryboardView> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final narrow = constraints.maxWidth < StoryboardView.pageChipDockBreakpoint;
         return Stack(
           children: [
             const Positioned.fill(child: StoryboardCanvas()),
@@ -198,20 +202,30 @@ class _StoryboardViewState extends ConsumerState<StoryboardView> {
               const Positioned.fill(child: _StoryboardEmptyHint()),
             if (page != null)
               Positioned(
-                top: 8,
                 left: 8,
+                top: narrow ? null : 8,
+                bottom: narrow ? 8 : null,
                 child: _StoryboardPageChip(
+                  key: const ValueKey('storyboard-page-chip'),
                   width: page.width,
                   height: page.height,
                   panelCount: page.panels.length,
                 ),
               ),
+            // 只给 top/right 时 Positioned 会用无界宽度量工具条：窄屏上它会按
+            // 内容撑到视口左侧之外被裁掉，而且内部横向滚动失效（视口等于内容
+            // 宽度，没有可滚动的余量）。用 left+right 给出有界宽度、再靠 Align
+            // 贴右，工具条就始终留在视口内并保留滚动能力。
             Positioned(
               top: 8,
+              left: 8,
               right: 8,
-              child: AbsorbPointer(
-                absorbing: _leaving,
-                child: StoryboardToolbar(onClose: _leave),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: AbsorbPointer(
+                  absorbing: _leaving,
+                  child: StoryboardToolbar(onClose: _leave),
+                ),
               ),
             ),
           ],
@@ -224,6 +238,7 @@ class _StoryboardViewState extends ConsumerState<StoryboardView> {
 /// 页面尺寸与分镜数量；页面坐标就是最终输出像素，这里让用户随时能看到它。
 class _StoryboardPageChip extends StatelessWidget {
   const _StoryboardPageChip({
+    super.key,
     required this.width,
     required this.height,
     required this.panelCount,

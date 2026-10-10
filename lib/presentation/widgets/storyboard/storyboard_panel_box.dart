@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/gestures.dart';
@@ -65,6 +66,7 @@ class StoryboardPanelBox extends StatelessWidget {
     required this.selected,
     required this.polygonEditing,
     required this.scale,
+    required this.viewportSize,
     required this.handleHitExtent,
     required this.onBodyDragStart,
     required this.onBodyDragUpdate,
@@ -88,6 +90,12 @@ class StoryboardPanelBox extends StatelessWidget {
 
   /// 页面像素到屏幕像素的缩放。
   final double scale;
+
+  /// 画布视口尺寸。
+  ///
+  /// 解码宽度要用它封顶：画布可以放大，放大后面板的组件尺寸会超过视口，按
+  /// 组件尺寸解码等于把内存按缩放倍数成倍放大，而屏幕上最多只能看到一屏。
+  final Size viewportSize;
 
   final double handleHitExtent;
   final VoidCallback onBodyDragStart;
@@ -228,7 +236,10 @@ class StoryboardPanelBox extends StatelessWidget {
   /// 降采样，屏幕端接近 1:1 呈现——大图缩进小格时的摩尔纹主要来自这里；
   /// 也避免在小面板上解码整张大图。
   int? _decodeWidthFor(BuildContext context) {
-    final visible = panel.width * scale;
+    final onScreen = panel.width * scale;
+    final visible = onScreen.isFinite
+        ? math.min(onScreen, viewportSize.width)
+        : viewportSize.width;
     if (!visible.isFinite || visible <= 0) return null;
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final rounded = (visible * dpr).ceil().clamp(1, 1 << 14);

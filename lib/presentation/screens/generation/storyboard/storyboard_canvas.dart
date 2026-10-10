@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -21,10 +22,10 @@ import '../../../providers/storyboard/storyboard_repository_provider.dart';
 import '../../../widgets/storyboard/storyboard_panel_box.dart';
 import '../../../widgets/storyboard/storyboard_panel_image.dart';
 
-/// 页面到屏幕的固定变换。
+/// 页面到屏幕的变换。
 ///
-/// 分镜页不缩放也不平移：整页按视口等比例适配后恒定显示。这样点击、拖动与
-/// 拉框都只有一层固定换算，不存在缩放中心与视口偏移带来的锚点漂移。
+/// 基准是"整页等比例适配视口"，再叠加用户的双指缩放与平移。点击、拖动与
+/// 拉框都只经过这一层换算，不存在缩放中心与视口偏移带来的锚点漂移。
 class _PageFit {
   const _PageFit({required this.scale, required this.offset});
 
@@ -146,6 +147,49 @@ class _StoryboardCanvasState extends ConsumerState<StoryboardCanvas> {
   /// 本帧的页面适配结果；手势回调里要用同一个值。
   _PageFit _fit = const _PageFit(scale: 1, offset: Offset.zero);
 
+  /// 本帧 zoom 为 1 的基准变换；双指换算要由它反推平移。
+  _PageFit _baseFit = const _PageFit(scale: 1, offset: Offset.zero);
+
+  /// 用户缩放倍数，1 表示整页适应视口。
+  double _zoom = 1;
+
+  /// 相对基准变换的屏幕平移；每帧都会被钳回页面范围内。
+  Offset _pan = Offset.zero;
+
+  /// 各指针的当前位置。
+  ///
+  /// 与 [_pointerOrigin] 分开：那张表是点选判定的起点基准，这张表每帧更新，
+  /// 双指手势要用两个指针的实时位置换算缩放与平移。
+  final Map<int, Offset> _pointerPosition = <int, Offset>{};
+
+  /// 双指手势的起始距离；0 表示当前没有双指手势。
+  double _gestureStartDistance = 0;
+
+  /// 双指手势开始时的缩放倍数。
+  double _gestureStartZoom = 1;
+
+  /// 双指手势开始时焦点下的页面坐标；整个手势期间它都跟住焦点。
+  Offset _gestureAnchorPage = Offset.zero;
+
+  /// 双指视口手势进行中；分镜的拖动、缩放与拉框此时一律不接受。
+  ///
+  /// 第二根手指落下时，第一根手指可能已经被分镜的拖动识别器认领，之后越过
+  /// 手势阈值才触发 `onPanStart`。没有这道闸门，捏合的过程中会顺带把分镜拖动
+  /// 写进文档。
+  bool _viewportGesture = false;
+
+  /// 上一次干净点选的时间与位置，用于识别双击复位。
+  Duration? _lastTapTime;
+  Offset? _lastTapPosition;
+
+  /// 缩放上下限；上限足够把 1024 宽的页面放到手机屏幕上画细节。
+  static const double _minZoom = 1;
+  static const double _maxZoom = 8;
+
+  /// 双击复位的判定窗口。
+  static const Duration _doubleTapWindow = Duration(milliseconds: 300);
+  static const double _doubleTapSlop = 40;
+
   @override
   void dispose() {
     _focusNode.dispose();
@@ -166,7 +210,7 @@ class _StoryboardCanvasState extends ConsumerState<StoryboardCanvas> {
         if (page == null) return const SizedBox.expand();
         final pageSize = Size(page.width.toDouble(), page.height.toDouble());
         final viewportSize = Size(constraints.maxWidth, constraints.maxHeight);
-        _fit = _PageFit.of(pageSize: pageSize, viewportSize: viewportSize);
+        _resolveFit(pageSize: pageSize, viewportSize: viewportSize);
 
         final touch = context.interactionPolicy.touchAvailable;
         final handleExtent = touch
@@ -202,6 +246,7 @@ class _StoryboardCanvasState extends ConsumerState<StoryboardCanvas> {
                     child: StoryboardPageBackgroundView(
                       page: page,
                       galleryRoot: galleryRoot,
+                      viewportSize: viewportSize,
                       previewBytes:
                           preview.matches(
                             StoryboardGenerationPlanner.backgroundRequestId,
@@ -221,6 +266,7 @@ class _StoryboardCanvasState extends ConsumerState<StoryboardCanvas> {
                     handleExtent,
                     drawing,
                     preview,
+                    viewportSize,
                   ),
                   if (drawing) ..._buildDraftLayer(),
                   if (placing) ..._buildFillLargestLayer(page),
@@ -233,6 +279,55 @@ class _StoryboardCanvasState extends ConsumerState<StoryboardCanvas> {
     );
   }
 
+  /// 组合本帧的页面变换：先整页适应视口，再叠加用户缩放与平移。
+  ///
+  /// 平移每帧都会被钳回页面范围内——页面比视口小的一轴居中，比视口大的一轴
+  /// 不允许拖出视野留白。因此缩放为 1 时平移恒为零，与"整页恒定显示"的旧行为
+  /// 完全一致，双指以外的手势（点选、拖动、拉框）换算也都不变。
+  void _resolveFit({required Size pageSize, required Size viewportSize}) {
+    final base = _PageFit.of(pageSize: pageSize, viewportSize: viewportSize);
+    _baseFit = base;
+    if (_zoom <= _minZoom || base.scale <= 0) {
+      _zoom = _minZoom;
+      _pan = Offset.zero;
+      _fit = base;
+      return;
+    }
+    final scale = base.scale * _zoom;
+    final pageExtent = Size(pageSize.width * scale, pageSize.height * scale);
+    _pan = Offset(
+      _clampAxis(
+        value: _pan.dx,
+        pageExtent: pageExtent.width,
+        viewportExtent: viewportSize.width,
+        baseOffset: base.offset.dx,
+      ),
+      _clampAxis(
+        value: _pan.dy,
+        pageExtent: pageExtent.height,
+        viewportExtent: viewportSize.height,
+        baseOffset: base.offset.dy,
+      ),
+    );
+    _fit = _PageFit(scale: scale, offset: base.offset + _pan);
+  }
+
+  /// 单轴钳制：页面比视口小就居中，比视口大就只允许在页面范围内移动。
+  static double _clampAxis({
+    required double value,
+    required double pageExtent,
+    required double viewportExtent,
+    required double baseOffset,
+  }) {
+    if (pageExtent <= viewportExtent) {
+      return (viewportExtent - pageExtent) / 2 - baseOffset;
+    }
+    return value.clamp(
+      viewportExtent - pageExtent - baseOffset,
+      -baseOffset,
+    );
+  }
+
   List<Widget> _buildPanelLayer(
     StoryboardPage page,
     StoryboardInteractionState interaction,
@@ -240,6 +335,7 @@ class _StoryboardCanvasState extends ConsumerState<StoryboardCanvas> {
     double handleExtent,
     bool drawing,
     StoryboardPreviewState preview,
+    Size viewportSize,
   ) {
     final inset = storyboardPanelBoxInset(handleExtent);
     final children = <Widget>[];
@@ -261,6 +357,7 @@ class _StoryboardCanvasState extends ConsumerState<StoryboardCanvas> {
                 interaction.isSelected(panel.id) &&
                 !panel.locked,
             scale: _scale,
+            viewportSize: viewportSize,
             handleHitExtent: handleExtent,
             onTap: () => _ensureSelected(panel.id),
             onContextMenu: (position) => _showPanelMenu(panel, position),
@@ -339,11 +436,22 @@ class _StoryboardCanvasState extends ConsumerState<StoryboardCanvas> {
   // ==================== 指针 ====================
 
   void _onPointerDown(PointerDownEvent event) {
+    _pointerPosition[event.pointer] = event.localPosition;
     _pointerOrigin[event.pointer] = event.localPosition;
     if (_pointerOrigin.length == 1) _pointerMoved = false;
+    // 第二根手指落下：这段手势改判为视口缩放/平移，第一根手指带起来的编辑
+    // 就地取消。桌面鼠标只有一个指针，永远不会走到这里。
+    if (_pointerPosition.length == 2) _beginViewportGesture();
   }
 
   void _onPointerMove(PointerMoveEvent event) {
+    _pointerPosition[event.pointer] = event.localPosition;
+    if (_pointerPosition.length >= 2) {
+      if (_gestureStartDistance <= 0) _beginViewportGesture();
+      _pointerMoved = true;
+      _updateViewportGesture();
+      return;
+    }
     if (ref.read(storyboardInteractionProvider).placingFillLargest) {
       final pagePoint = _fit.toPage(event.localPosition);
       if (mounted) setState(() {});
@@ -360,19 +468,152 @@ class _StoryboardCanvasState extends ConsumerState<StoryboardCanvas> {
 
   void _onPointerUp(PointerUpEvent event, StoryboardPage page) {
     final wasTracked = _pointerOrigin.remove(event.pointer) != null;
+    _pointerPosition.remove(event.pointer);
+    _notifyPointerReleased();
     if (_pointerOrigin.isNotEmpty) return;
     // 只有干净的单击才改变选择；拖动由各手势自行处理。
-    if (!wasTracked || _pointerMoved || _session != null) return;
+    if (!wasTracked || _pointerMoved || _session != null) {
+      _forgetTap();
+      return;
+    }
     if (ref.read(storyboardInteractionProvider).placingFillLargest) {
       _commitFillLargest();
       return;
     }
+    // 双击复位：放大以后最快的"整页可见"动作。先于点选判定，第二次抬手不再
+    // 改变选中对象。
+    if (_isDoubleTap(event)) {
+      _forgetTap();
+      _resetViewport();
+      return;
+    }
+    _rememberTap(event);
     _selectAt(event.localPosition, page);
   }
 
   void _onPointerCancel(PointerCancelEvent event) {
     _pointerOrigin.remove(event.pointer);
+    _pointerPosition.remove(event.pointer);
+    _notifyPointerReleased();
     if (_pointerOrigin.isEmpty) _pointerMoved = false;
+  }
+
+  /// 有指针离开：视口手势要么重新锚定剩下的两根手指，要么就此结束。
+  void _notifyPointerReleased() {
+    if (_pointerPosition.length < 2) {
+      _endViewportGesture();
+    } else if (_viewportGesture) {
+      _anchorViewportGesture();
+    }
+  }
+
+  // ==================== 视口缩放与平移 ====================
+
+  /// 两个指针对应的屏幕位置；不足两个指针时返回 null。
+  ///
+  /// 固定取指针 id 最小的两个：中间有手指抬起时，剩下的这一对在两次换算之间
+  /// 保持稳定，不会因为顺序变化把平移抖一下。
+  (Offset, Offset)? _twoPointers() {
+    if (_pointerPosition.length < 2) return null;
+    final ids = _pointerPosition.keys.toList()..sort();
+    return (_pointerPosition[ids[0]]!, _pointerPosition[ids[1]]!);
+  }
+
+  /// 双指手势开始：接管这段手势，并把焦点下的页面点当作整个手势的锚点。
+  void _beginViewportGesture() {
+    if (_twoPointers() == null) return;
+    _viewportGesture = true;
+    _abortPointerEdit();
+    _pointerMoved = true;
+    _forgetTap();
+    _anchorViewportGesture();
+  }
+
+  /// 以当前两指位置与当前视口重新锚定。
+  ///
+  /// 起步时调用；参与换算的指针换了一对（例如中途抬起一根手指）时也要调用，
+  /// 否则剩下的手指一动，视口就会按旧锚点跳一下。
+  void _anchorViewportGesture() {
+    final points = _twoPointers();
+    if (points == null) return;
+    final (first, second) = points;
+    _gestureStartDistance = (first - second).distance;
+    _gestureStartZoom = _zoom;
+    _gestureAnchorPage = _fit.toPage((first + second) / 2);
+  }
+
+  /// 双指更新：两指距离决定缩放，焦点位移决定平移。
+  ///
+  /// 由锚点反推平移（而不是直接累加位移），这样缩放与平移同时发生时焦点下的
+  /// 页面点始终贴着手指，不会朝视口中心漂移。
+  void _updateViewportGesture() {
+    final points = _twoPointers();
+    if (points == null || _gestureStartDistance <= 0) return;
+    final (first, second) = points;
+    final distance = (first - second).distance;
+    if (distance <= 0) return;
+    final focal = (first + second) / 2;
+    final zoom = (_gestureStartZoom * distance / _gestureStartDistance).clamp(
+      _minZoom,
+      _maxZoom,
+    );
+    final base = _baseFit;
+    setState(() {
+      _zoom = zoom;
+      _pan = focal - base.offset - _gestureAnchorPage * (base.scale * zoom);
+    });
+  }
+
+  /// 双指手势结束（指针少于两个）：解除闸门，后续手势恢复正常的编辑语义。
+  void _endViewportGesture() {
+    _gestureStartDistance = 0;
+    _viewportGesture = false;
+  }
+
+  /// 取消进行中的拖动、拉框与放置预览。
+  ///
+  /// 预览几何只存在于画布状态里，原样丢弃即可；已经压入撤销栈的快照留在栈里，
+  /// 撤销时回到同一份文档，不产生额外改动。
+  void _abortPointerEdit() {
+    final session = _session;
+    if (session != null && session.kind == _DragKind.draft) {
+      _cancelDraft();
+    } else if (session != null || _previewPanelId != null) {
+      _session = null;
+      _clearPreview();
+    }
+    if (_fillLargestPreview != null) {
+      setState(() => _fillLargestPreview = null);
+    }
+  }
+
+  void _rememberTap(PointerUpEvent event) {
+    _lastTapTime = event.timeStamp;
+    _lastTapPosition = event.localPosition;
+  }
+
+  void _forgetTap() {
+    _lastTapTime = null;
+    _lastTapPosition = null;
+  }
+
+  /// 与原地点选同址、且间隔在 [_doubleTapWindow] 内的第二次抬手才算双击。
+  bool _isDoubleTap(PointerUpEvent event) {
+    final time = _lastTapTime;
+    final position = _lastTapPosition;
+    if (time == null || position == null) return false;
+    final elapsed = event.timeStamp - time;
+    if (elapsed < Duration.zero || elapsed > _doubleTapWindow) return false;
+    return (event.localPosition - position).distance <= _doubleTapSlop;
+  }
+
+  /// 回到整页适应视口。
+  void _resetViewport() {
+    if (_zoom <= _minZoom && _pan == Offset.zero) return;
+    setState(() {
+      _zoom = _minZoom;
+      _pan = Offset.zero;
+    });
   }
 
   /// 点选：先命中分镜；没命中但落在页面内则选中背景；页面之外取消选择。
@@ -437,7 +678,7 @@ class _StoryboardCanvasState extends ConsumerState<StoryboardCanvas> {
       ref.read(storyboardDocumentControllerProvider.notifier);
 
   void _beginBodyDrag(StoryboardPanel panel) {
-    if (panel.locked) return;
+    if (_viewportGesture || panel.locked) return;
     ref.read(storyboardInteractionProvider.notifier).setGestureActive(true);
     _document.beginGesture();
     _focusNode.requestFocus();
@@ -470,7 +711,7 @@ class _StoryboardCanvasState extends ConsumerState<StoryboardCanvas> {
   }
 
   void _beginResize(StoryboardPanel panel, StoryboardPanelCorner corner) {
-    if (panel.locked) return;
+    if (_viewportGesture || panel.locked) return;
     ref.read(storyboardInteractionProvider.notifier).setGestureActive(true);
     _document.beginGesture();
     _focusNode.requestFocus();
@@ -558,7 +799,7 @@ class _StoryboardCanvasState extends ConsumerState<StoryboardCanvas> {
   }
 
   void _beginVertexDrag(StoryboardPanel panel, int index) {
-    if (panel.locked) return;
+    if (_viewportGesture || panel.locked) return;
     _document.beginGesture();
     _focusNode.requestFocus();
     _session = _DragSession(
@@ -864,6 +1105,7 @@ class _StoryboardCanvasState extends ConsumerState<StoryboardCanvas> {
   // ==================== 拉框新建 ====================
 
   void _beginDraft(Offset localPosition) {
+    if (_viewportGesture) return;
     final start = _fit.toPage(localPosition);
     setState(() {
       _draftRect = Rect.fromPoints(start, start);
@@ -1009,11 +1251,15 @@ class StoryboardPageBackgroundView extends StatelessWidget {
     super.key,
     required this.page,
     required this.galleryRoot,
+    required this.viewportSize,
     this.previewBytes,
   });
 
   final StoryboardPage page;
   final String? galleryRoot;
+
+  /// 画布视口尺寸；解码宽度按它封顶，放大画布不会成倍增加解码内存。
+  final Size viewportSize;
 
   /// 正在生成的背景流式预览帧；为空时只显示已有底图。
   final Uint8List? previewBytes;
@@ -1032,9 +1278,11 @@ class StoryboardPageBackgroundView extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         // 按屏幕上的实际像素解码：解码阶段完成降采样，避免大背景图缩到
-        // 视口尺寸时的摩尔纹；也省内存。
+        // 视口尺寸时的摩尔纹；也省内存。放大画布时组件的实际尺寸会超过视口，
+        // 因此按视口宽度封顶——屏幕上一屏之内仍是一比一采样。
         final dpr = MediaQuery.devicePixelRatioOf(context);
-        final visible = constraints.maxWidth * dpr;
+        final visible =
+            math.min(constraints.maxWidth, viewportSize.width) * dpr;
         final provider = StoryboardPanelImage.providerFor(
           galleryRoot: galleryRoot,
           relativePath: background.imagePath,
