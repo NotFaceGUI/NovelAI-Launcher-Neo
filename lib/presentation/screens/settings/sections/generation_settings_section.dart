@@ -7,6 +7,7 @@ import '../../../../core/constants/storage_keys.dart';
 import '../../../../core/storage/local_storage_service.dart';
 import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/localization_extension.dart';
+import '../../../../data/models/prompt/prompt_weight_range.dart';
 import '../../../providers/generation/generation_params_notifier.dart';
 import '../../../providers/generation/generation_settings_notifiers.dart';
 import '../../../providers/notification_settings_provider.dart';
@@ -202,6 +203,8 @@ class _GenerationSettingsSectionState
                   }
                 },
               ),
+              const Divider(height: 8),
+              const _PromptWeightRangeControl(),
             ],
           ),
         ),
@@ -503,6 +506,112 @@ class _GenerationSettingsSectionState
           );
         },
       ),
+    );
+  }
+}
+
+/// 提示词权重编辑范围；只影响编辑/滑块，不改变已有提示词的解析结果。
+class _PromptWeightRangeControl extends ConsumerStatefulWidget {
+  const _PromptWeightRangeControl();
+
+  @override
+  ConsumerState<_PromptWeightRangeControl> createState() =>
+      _PromptWeightRangeControlState();
+}
+
+class _PromptWeightRangeControlState
+    extends ConsumerState<_PromptWeightRangeControl> {
+  RangeValues? _draft;
+
+  String _format(double value) => PromptWeightRange.format(value);
+
+  RangeValues _normalize(RangeValues values) {
+    final lower = values.start.clamp(
+      PromptWeightRange.absoluteMin,
+      PromptWeightRange.absoluteMax,
+    );
+    final upper = values.end.clamp(
+      PromptWeightRange.absoluteMin,
+      PromptWeightRange.absoluteMax,
+    );
+    return lower < upper
+        ? RangeValues(lower, upper)
+        : const RangeValues(
+            PromptWeightRange.absoluteMin,
+            PromptWeightRange.absoluteMax,
+          );
+  }
+
+  Future<void> _persist(RangeValues values) async {
+    final normalized = _normalize(values);
+    final l10n = context.l10n;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      await ref
+          .read(promptWeightRangeSettingsProvider.notifier)
+          .setRange(normalized.start, normalized.end);
+    } catch (error) {
+      messenger?.showSnackBar(
+        SnackBar(content: Text(l10n.globalSettings_saveFailed('$error'))),
+      );
+    } finally {
+      if (mounted) setState(() => _draft = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final range = ref.watch(promptWeightRangeSettingsProvider);
+    final values = _draft ?? RangeValues(range.min, range.max);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.tune),
+          title: Text(l10n.settings_promptWeightRange),
+          subtitle: Text(l10n.settings_promptWeightRangeSubtitle),
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: Text(
+            '${_format(values.start)} – ${_format(values.end)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
+        ),
+        RangeSlider(
+          key: const ValueKey('prompt-weight-range-slider'),
+          values: values,
+          min: PromptWeightRange.absoluteMin,
+          max: PromptWeightRange.absoluteMax,
+          divisions:
+              ((PromptWeightRange.absoluteMax - PromptWeightRange.absoluteMin) /
+                      PromptWeightRange.step)
+                  .round(),
+          labels: RangeLabels(_format(values.start), _format(values.end)),
+          onChanged: (next) => setState(() => _draft = _normalize(next)),
+          onChangeEnd: _persist,
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            key: const ValueKey('prompt-weight-range-reset'),
+            onPressed: () {
+              setState(() => _draft = null);
+              _persist(
+                const RangeValues(
+                  PromptWeightRange.absoluteMin,
+                  PromptWeightRange.absoluteMax,
+                ),
+              );
+            },
+            child: Text(l10n.settings_promptWeightRangeReset),
+          ),
+        ),
+      ],
     );
   }
 }

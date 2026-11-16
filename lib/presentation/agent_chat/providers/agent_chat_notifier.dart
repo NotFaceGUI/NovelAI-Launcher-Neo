@@ -36,6 +36,7 @@ import '../../prompt_assistant/providers/prompt_assistant_config_provider.dart';
 import '../../prompt_assistant/providers/web_access_provider.dart';
 import '../../prompt_assistant/services/prompt_assistant_service.dart';
 import '../../providers/fixed_tags_provider.dart';
+import '../../providers/generation/generation_settings_notifiers.dart';
 import '../../providers/precise_ref_library_provider.dart';
 import '../../providers/tag_library_page_provider.dart';
 import '../../providers/vibe_library_provider.dart';
@@ -906,6 +907,7 @@ class AgentChatNotifier extends StateNotifier<AgentChatState> {
       mode: modeOverride ?? agentSettings.chat.systemPromptMode,
       enabledToolPacks: enabledToolPacks,
       disabledToolPacks: disabledToolPacks,
+      promptWeightRange: _ref.read(promptWeightRangeSettingsProvider),
     );
   }
 

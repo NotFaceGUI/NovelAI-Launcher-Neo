@@ -1499,6 +1499,7 @@ class _UnifiedPromptInputState extends ConsumerState<UnifiedPromptInput> {
             focusNode: _effectiveFocusNode,
             enableWheelAdjustment: enableWheelAdjustment,
             enabled: !_tagMode && !widget.config.readOnly,
+            weightRange: ref.watch(promptWeightRangeSettingsProvider),
             child: clipboardAwareInput,
           );
 

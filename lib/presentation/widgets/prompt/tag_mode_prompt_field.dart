@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../providers/generation/generation_settings_notifiers.dart';
 import '../../providers/prompt_editor_preferences_provider.dart';
 import '../../../core/utils/localization_extension.dart';
 import 'prompt_tag_mode_toggle.dart';
@@ -200,6 +201,9 @@ class _TagModePromptFieldState extends ConsumerState<TagModePromptField> {
                         focusNode: widget.sourceFocusNode,
                         enabled: widget.enabled && !_session.tagMode,
                         enableWheelAdjustment: widget.enableWheelAdjustment,
+                        weightRange: ref.watch(
+                          promptWeightRangeSettingsProvider,
+                        ),
                         child: widget.child,
                       ),
                     ),

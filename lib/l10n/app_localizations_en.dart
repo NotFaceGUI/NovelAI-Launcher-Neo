@@ -7963,6 +7963,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'When prompt text is selected, use the wheel only to adjust its weight and suppress other scroll actions.';
 
   @override
+  String get settings_promptWeightRange => 'Prompt weight range';
+
+  @override
+  String get settings_promptWeightRangeSubtitle =>
+      'Controls the allowed range for the weight slider and numeric input. Existing prompts are not rewritten.';
+
+  @override
+  String get settings_promptWeightRangeReset => 'Reset to default';
+
+  @override
   String settings_queueRetryCountMax(Object count) {
     return 'Max $count times';
   }

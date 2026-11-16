@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nai_launcher/data/models/agent/agent_settings.dart';
+import 'package:nai_launcher/data/models/prompt/prompt_weight_range.dart';
 import 'package:nai_launcher/presentation/agent_chat/services/agent_system_prompt.dart';
 
 void main() {
@@ -195,5 +196,23 @@ void main() {
     expect(prompt, contains('Enabled: core, generation, queue, tagLibrary'));
     expect(prompt, contains('Disabled: gallery, references, storyboard'));
     expect(prompt, contains('Settings > Agent > Tool packs'));
+  });
+
+  test('configured prompt weight range is summarized for the agent', () {
+    final custom = buildAgentSystemPrompt(
+      workspacePath: 'workspace',
+      webAccessEnabled: false,
+      skillBlock: '',
+      promptWeightRange: const PromptWeightRange(min: 0.5, max: 2),
+    );
+    final defaults = buildAgentSystemPrompt(
+      workspacePath: 'workspace',
+      webAccessEnabled: false,
+      skillBlock: '',
+    );
+
+    expect(custom, contains('Prompt weights:'));
+    expect(custom, contains('0.50–2'));
+    expect(defaults, isNot(contains('Prompt weights:')));
   });
 }

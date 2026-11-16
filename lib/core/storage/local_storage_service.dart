@@ -146,9 +146,7 @@ class LocalStorageService {
 
   /// 获取 Model Mode（Anime / Furry，默认 Anime）
   ModelMode getModelMode() {
-    return ModelMode.fromName(
-      getSetting<String>(StorageKeys.modelMode),
-    );
+    return ModelMode.fromName(getSetting<String>(StorageKeys.modelMode));
   }
 
   /// 保存 Model Mode
@@ -530,6 +528,26 @@ class LocalStorageService {
   /// 保存是否启用滚轮调整提示词权重
   Future<void> setEnablePromptWeightScroll(bool value) async {
     await setSetting(StorageKeys.enablePromptWeightScroll, value);
+  }
+
+  /// 读取用户配置的提示词权重下限；未配置时返回 null。
+  double? getPromptWeightMin() {
+    final value = getSetting<num>(StorageKeys.promptWeightMin);
+    return value?.toDouble();
+  }
+
+  /// 读取用户配置的提示词权重上限；未配置时返回 null。
+  double? getPromptWeightMax() {
+    final value = getSetting<num>(StorageKeys.promptWeightMax);
+    return value?.toDouble();
+  }
+
+  /// 原子保存提示词权重范围。
+  Future<void> setPromptWeightRange(double min, double max) async {
+    await setSettings({
+      StorageKeys.promptWeightMin: min,
+      StorageKeys.promptWeightMax: max,
+    });
   }
 
   // ==================== Cooccurrence Recommendation ====================
@@ -1179,10 +1197,7 @@ class LocalStorageService {
 
   /// 无限画布是否处于打开状态（重启后恢复上次的工作视图）
   bool getInfiniteCanvasOpen() =>
-      getSetting<bool>(
-        StorageKeys.infiniteCanvasOpen,
-        defaultValue: false,
-      ) ??
+      getSetting<bool>(StorageKeys.infiniteCanvasOpen, defaultValue: false) ??
       false;
 
   Future<void> setInfiniteCanvasOpen(bool value) async {

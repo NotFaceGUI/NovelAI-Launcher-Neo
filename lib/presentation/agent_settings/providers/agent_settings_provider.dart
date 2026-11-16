@@ -16,6 +16,7 @@ import '../../../data/models/agent/agent_settings.dart';
 import '../../../data/models/agent/agent_tool_pack.dart';
 import '../../../data/repositories/gallery_folder_repository.dart';
 import '../../agent_chat/services/agent_system_prompt.dart';
+import '../../providers/generation/generation_settings_notifiers.dart';
 import '../../providers/image_save_settings_provider.dart';
 import '../../prompt_assistant/models/prompt_assistant_models.dart';
 
@@ -366,6 +367,7 @@ class AgentSettingsNotifier extends StateNotifier<AgentSettingsState> {
       mode: mode,
       enabledToolPacks: enabledToolPacks,
       disabledToolPacks: disabledToolPacks,
+      promptWeightRange: _ref.read(promptWeightRangeSettingsProvider),
     );
   }
 

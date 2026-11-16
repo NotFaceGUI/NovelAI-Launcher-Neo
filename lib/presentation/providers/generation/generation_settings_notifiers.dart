@@ -4,6 +4,7 @@ import '../../../core/autocomplete/autocomplete_settings.dart'
     as completion_settings;
 import '../../../core/storage/local_storage_service.dart';
 import '../../../core/utils/app_logger.dart';
+import '../../../data/models/prompt/prompt_weight_range.dart';
 
 part 'generation_settings_notifiers.g.dart';
 
@@ -231,6 +232,43 @@ class GenerationStreamPreviewSettings
     );
     return operation;
   }
+}
+
+/// 提示词权重编辑范围设置 Notifier。
+@Riverpod(keepAlive: true)
+class PromptWeightRangeSettings extends _$PromptWeightRangeSettings {
+  LocalStorageService get _storage => ref.read(localStorageServiceProvider);
+
+  @override
+  PromptWeightRange build() {
+    final min = _storage.getPromptWeightMin();
+    final max = _storage.getPromptWeightMax();
+    return PromptWeightRange.tryCreate(
+          min ?? PromptWeightRange.defaults.min,
+          max ?? PromptWeightRange.defaults.max,
+        ) ??
+        PromptWeightRange.defaults;
+  }
+
+  Future<void> setRange(double min, double max) async {
+    final range = PromptWeightRange.tryCreate(min, max);
+    if (range == null) {
+      throw const FormatException('Invalid prompt weight range.');
+    }
+    if (range == state) return;
+    final previous = state;
+    state = range;
+    try {
+      await _storage.setPromptWeightRange(range.min, range.max);
+    } catch (error, stackTrace) {
+      state = previous;
+      AppLogger.e('Failed to persist prompt weight range', error, stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<void> reset() =>
+      setRange(PromptWeightRange.defaults.min, PromptWeightRange.defaults.max);
 }
 
 /// 每次请求生成图片数量设置 Notifier（1-4张）

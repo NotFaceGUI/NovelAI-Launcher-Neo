@@ -110,6 +110,32 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Ctrl + wheel adjusts weight by whole units', (tester) async {
+    final prompt = TextEditingController(text: 'cat');
+    final focus = FocusNode();
+    final page = ScrollController(initialScrollOffset: 100);
+    _registerCleanup(tester, prompt, focus, page);
+
+    await _pumpHarness(
+      tester,
+      prompt: prompt,
+      focus: focus,
+      page: page,
+      enableWheelAdjustment: true,
+    );
+    focus.requestFocus();
+    prompt.selection = const TextSelection(baseOffset: 0, extentOffset: 3);
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await _sendWheel(tester, delta: const Offset(0, -40));
+    await tester.pump();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+
+    expect(prompt.text, '2.00::cat::');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('selected prompt adjusts weight without scrolling the page', (
     tester,
   ) async {

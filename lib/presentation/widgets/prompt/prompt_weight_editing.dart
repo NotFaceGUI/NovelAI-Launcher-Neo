@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/utils/character_prompt_block_parser.dart';
 import '../../../core/utils/prompt_edit_document.dart';
+import '../../../data/models/prompt/prompt_tag.dart';
+import '../../../data/models/prompt/prompt_weight_range.dart';
 import 'nai_syntax_controller.dart';
 
 /// 权重解析结果
@@ -116,7 +118,11 @@ class PromptWeightEditing {
     return PromptWeightValue(baseText: baseText.trim(), weight: weight);
   }
 
-  static bool applyWeight(TextEditingController controller, double newWeight) {
+  static bool applyWeight(
+    TextEditingController controller,
+    double newWeight, {
+    PromptWeightRange weightRange = PromptWeightRange.defaults,
+  }) {
     final result = parseSelection(controller);
     final baseText = result.baseText;
 
@@ -129,6 +135,7 @@ class PromptWeightEditing {
       numericEmphasisEnabled:
           controller is! NaiSyntaxController ||
           controller.numericEmphasisEnabled,
+      weightRange: weightRange,
     );
 
     final text = controller.text;
@@ -153,15 +160,22 @@ class PromptWeightEditing {
     String source,
     double weight, {
     bool numericEmphasisEnabled = true,
+    PromptWeightRange weightRange = PromptWeightRange.defaults,
   }) {
     final spans = PromptEditDocument.parse(source);
     final disabled = spans.length == 1 && spans.single.disabled;
     final parsed = parseWeightSyntax(source);
-    final value = weight.clamp(0.1, 3.0);
+    final value = weightRange.clamp(weight);
+    // 括号语法只能表达正权重；负数、0 和超出括号实用范围的数字必须走数值语法。
+    final useNumeric =
+        numericEmphasisEnabled ||
+        value <= 0 ||
+        value < PromptTag.minWeight ||
+        value > PromptTag.maxWeight;
     String text;
     if ((value - 1).abs() < 0.00001) {
       text = parsed.baseText;
-    } else if (numericEmphasisEnabled) {
+    } else if (useNumeric) {
       text = '${value.toStringAsFixed(2)}::${parsed.baseText}::';
     } else {
       final depth = (math.log(value).abs() / math.log(1.05)).round();

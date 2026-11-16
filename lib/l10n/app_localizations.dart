@@ -14116,6 +14116,24 @@ abstract class AppLocalizations {
   /// **'When prompt text is selected, use the wheel only to adjust its weight and suppress other scroll actions.'**
   String get settings_enablePromptWeightScrollSubtitle;
 
+  /// No description provided for @settings_promptWeightRange.
+  ///
+  /// In en, this message translates to:
+  /// **'Prompt weight range'**
+  String get settings_promptWeightRange;
+
+  /// No description provided for @settings_promptWeightRangeSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Controls the allowed range for the weight slider and numeric input. Existing prompts are not rewritten.'**
+  String get settings_promptWeightRangeSubtitle;
+
+  /// No description provided for @settings_promptWeightRangeReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to default'**
+  String get settings_promptWeightRangeReset;
+
   /// No description provided for @settings_queueRetryCountMax.
   ///
   /// In en, this message translates to:

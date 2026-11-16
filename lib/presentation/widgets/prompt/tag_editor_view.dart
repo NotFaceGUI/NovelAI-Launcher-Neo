@@ -14,6 +14,7 @@ import '../../../core/utils/prompt_edit_document.dart';
 import '../../adaptive/interaction_policy.dart';
 import '../../themes/core/layered_surface_style.dart';
 import '../../themes/core/input_surface_style.dart';
+import '../../providers/generation/generation_settings_notifiers.dart';
 import '../../router/app_routes.dart';
 import '../autocomplete/autocomplete_wrapper.dart';
 import '../autocomplete/autocomplete_overlay_handle.dart';
@@ -89,7 +90,10 @@ class _TagEditorViewState extends ConsumerState<TagEditorView> {
   );
   Set<int> _boxBase = {};
   TagEditorSession get session => widget.session;
-  TagEditorCommands get commands => TagEditorCommands(session);
+  TagEditorCommands get commands => TagEditorCommands(
+    session,
+    weightRange: ref.read(promptWeightRangeSettingsProvider),
+  );
 
   @override
   void initState() {
@@ -400,7 +404,9 @@ class _TagEditorViewState extends ConsumerState<TagEditorView> {
     }
     GestureBinding.instance.pointerSignalResolver.register(event, (resolved) {
       final scroll = resolved as PointerScrollEvent;
-      commands.adjustWeight(step: scroll.scrollDelta.dy < 0 ? 0.05 : -0.05);
+      final keys = HardwareKeyboard.instance;
+      final step = keys.isControlPressed || keys.isMetaPressed ? 1.0 : 0.05;
+      commands.adjustWeight(step: scroll.scrollDelta.dy < 0 ? step : -step);
       scroll.respond(allowPlatformDefault: false);
     });
   }
@@ -416,6 +422,7 @@ class _TagEditorViewState extends ConsumerState<TagEditorView> {
             content: ListenableBuilder(
               listenable: session,
               builder: (context, _) => PromptWeightControls(
+                weightRange: ref.read(promptWeightRangeSettingsProvider),
                 onClose: session.clearSelection,
                 weight: commands.weight,
                 enabled: widget.enabled && commands.canAdjust,
@@ -642,6 +649,7 @@ class _TagEditorViewState extends ConsumerState<TagEditorView> {
               child: Padding(
                 padding: const EdgeInsets.all(6),
                 child: PromptWeightControls(
+                  weightRange: ref.watch(promptWeightRangeSettingsProvider),
                   showEdit:
                       context.interactionPolicy.shouldExposeTouchAlternatives,
                   onEdit:

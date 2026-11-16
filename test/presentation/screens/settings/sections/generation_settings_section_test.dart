@@ -270,6 +270,53 @@ void main() {
 
     expect(find.text('自定义音效'), findsNothing);
   });
+
+  testWidgets('prompt weight range slider persists and resets', (tester) async {
+    final storage = _MemoryLocalStorageService();
+    await tester.binding.setSurfaceSize(const Size(1000, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [localStorageServiceProvider.overrideWith((ref) => storage)],
+        child: const MaterialApp(
+          locale: Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: SingleChildScrollView(child: GenerationSettingsSection()),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final sliderFinder = find.byKey(
+      const ValueKey('prompt-weight-range-slider'),
+    );
+    expect(sliderFinder, findsOneWidget);
+    expect(find.text('-10 – 10'), findsOneWidget);
+
+    tester.widget<RangeSlider>(sliderFinder).onChanged!(
+      const RangeValues(0.5, 2.0),
+    );
+    await tester.pump();
+    tester.widget<RangeSlider>(sliderFinder).onChangeEnd!(
+      const RangeValues(0.5, 2.0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(storage.values[StorageKeys.promptWeightMin], 0.5);
+    expect(storage.values[StorageKeys.promptWeightMax], 2.0);
+    expect(find.text('0.50 – 2'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('prompt-weight-range-reset')));
+    await tester.pumpAndSettle();
+
+    expect(storage.values[StorageKeys.promptWeightMin], -10.0);
+    expect(storage.values[StorageKeys.promptWeightMax], 10.0);
+    expect(find.text('-10 – 10'), findsOneWidget);
+  });
 }
 
 class _MemoryLocalStorageService extends LocalStorageService {
@@ -292,5 +339,13 @@ class _MemoryLocalStorageService extends LocalStorageService {
       throw error;
     }
     values[key] = value;
+  }
+
+  @override
+  Future<void> setSettings(Map<String, Object?> values) async {
+    if (writeError case final error?) {
+      throw error;
+    }
+    this.values.addAll(values);
   }
 }

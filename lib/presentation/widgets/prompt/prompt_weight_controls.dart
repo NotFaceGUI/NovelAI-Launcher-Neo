@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/utils/localization_extension.dart';
+import '../../../data/models/prompt/prompt_weight_range.dart';
 import '../../adaptive/interaction_policy.dart';
 import '../../themes/core/layered_surface_style.dart';
 
@@ -16,11 +18,13 @@ class PromptWeightControls extends StatefulWidget {
     this.onClose,
     this.onEdit,
     this.showEdit = false,
+    this.weightRange = PromptWeightRange.defaults,
   });
   final double? weight;
   final ValueChanged<double> onWeight;
   final ValueChanged<double> onStep;
   final bool enabled;
+  final PromptWeightRange weightRange;
   final List<Widget> trailing;
   final Widget? caption;
   final VoidCallback? onClose;
@@ -52,7 +56,11 @@ class _PromptWeightControlsState extends State<PromptWeightControls> {
 
   void _submit(String value) {
     final weight = double.tryParse(value);
-    if (weight == null || !weight.isFinite || weight < 0.1 || weight > 3) {
+    final range = widget.weightRange;
+    if (weight == null ||
+        !weight.isFinite ||
+        weight < range.min ||
+        weight > range.max) {
       setState(() => _invalid = true);
       return;
     }
@@ -123,6 +131,12 @@ class _PromptWeightControlsState extends State<PromptWeightControls> {
     );
   }
 
+  /// Ctrl/Cmd 按住时按整档调整，普通点击保持 0.05 的细调。
+  double get _stepMagnitude {
+    final keys = HardwareKeyboard.instance;
+    return keys.isControlPressed || keys.isMetaPressed ? 1.0 : 0.05;
+  }
+
   Widget _buildStepper(BuildContext context, double extent) {
     final l10n = context.l10n;
     final theme = Theme.of(context);
@@ -134,7 +148,9 @@ class _PromptWeightControlsState extends State<PromptWeightControls> {
         children: [
           IconButton(
             tooltip: l10n.tooltip_decreaseWeight,
-            onPressed: widget.enabled ? () => widget.onStep(-0.05) : null,
+            onPressed: widget.enabled
+                ? () => widget.onStep(-_stepMagnitude)
+                : null,
             constraints: BoxConstraints.tightFor(width: extent, height: extent),
             icon: const Icon(Icons.remove, size: 18),
           ),
@@ -154,7 +170,9 @@ class _PromptWeightControlsState extends State<PromptWeightControls> {
           ),
           IconButton(
             tooltip: l10n.tooltip_increaseWeight,
-            onPressed: widget.enabled ? () => widget.onStep(0.05) : null,
+            onPressed: widget.enabled
+                ? () => widget.onStep(_stepMagnitude)
+                : null,
             constraints: BoxConstraints.tightFor(width: extent, height: extent),
             icon: const Icon(Icons.add, size: 18),
           ),
@@ -175,7 +193,10 @@ class _PromptWeightControlsState extends State<PromptWeightControls> {
           controller: _input,
           focusNode: _focus,
           enabled: widget.enabled,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          keyboardType: const TextInputType.numberWithOptions(
+            decimal: true,
+            signed: true,
+          ),
           textAlign: TextAlign.center,
           textAlignVertical: TextAlignVertical.center,
           style: theme.textTheme.titleMedium?.copyWith(
@@ -185,7 +206,10 @@ class _PromptWeightControlsState extends State<PromptWeightControls> {
             isDense: true,
             filled: false,
             hintText: l10n.tagMode_mixedWeights,
-            errorText: _invalid ? '0.10–3.00' : null,
+            errorText: _invalid
+                ? '${PromptWeightRange.format(widget.weightRange.min)}–'
+                      '${PromptWeightRange.format(widget.weightRange.max)}'
+                : null,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 8,
               vertical: 4,

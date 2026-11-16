@@ -3702,6 +3702,9 @@
   "settings_showRandomPromptToolsSubtitle": "在生成頁顯示“隨機提示詞”按鈕和“抽卡模式”開關",
   "settings_enablePromptWeightScroll": "滾輪調整提示詞權重",
   "settings_enablePromptWeightScrollSubtitle": "選中提示詞時，滾輪僅調整權重，不再觸發頁面滾動等其他滾輪操作",
+  "settings_promptWeightRange": "提示詞權重範圍",
+  "settings_promptWeightRangeSubtitle": "控制權重滑桿和數值輸入允許的範圍；不會改寫既有提示詞。",
+  "settings_promptWeightRangeReset": "恢復預設",
   "settings_queueRetryCountMax": "最多 {count} 次",
   "@settings_queueRetryCountMax": {
     "placeholders": {

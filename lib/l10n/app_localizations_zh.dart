@@ -7649,6 +7649,16 @@ class AppLocalizationsZh extends AppLocalizations {
       '选中提示词时，滚轮仅调整权重，不再触发页面滚动等其他滚轮操作';
 
   @override
+  String get settings_promptWeightRange => '提示词权重范围';
+
+  @override
+  String get settings_promptWeightRangeSubtitle =>
+      '控制权重滑块和数值输入允许的范围；不会改写已有提示词。';
+
+  @override
+  String get settings_promptWeightRangeReset => '恢复默认';
+
+  @override
   String settings_queueRetryCountMax(Object count) {
     return '最多 $count 次';
   }
@@ -23226,6 +23236,16 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   @override
   String get settings_enablePromptWeightScrollSubtitle =>
       '選中提示詞時，滾輪僅調整權重，不再觸發頁面滾動等其他滾輪操作';
+
+  @override
+  String get settings_promptWeightRange => '提示詞權重範圍';
+
+  @override
+  String get settings_promptWeightRangeSubtitle =>
+      '控制權重滑桿和數值輸入允許的範圍；不會改寫既有提示詞。';
+
+  @override
+  String get settings_promptWeightRangeReset => '恢復預設';
 
   @override
   String settings_queueRetryCountMax(Object count) {

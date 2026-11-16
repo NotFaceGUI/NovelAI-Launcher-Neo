@@ -195,6 +195,25 @@ final generationStreamPreviewSettingsProvider =
 );
 
 typedef _$GenerationStreamPreviewSettings = Notifier<bool>;
+String _$promptWeightRangeSettingsHash() =>
+    r'922cdafd763098a55f73fc92c47d4dac9a6494d0';
+
+/// 提示词权重编辑范围设置 Notifier。
+///
+/// Copied from [PromptWeightRangeSettings].
+@ProviderFor(PromptWeightRangeSettings)
+final promptWeightRangeSettingsProvider =
+    NotifierProvider<PromptWeightRangeSettings, PromptWeightRange>.internal(
+  PromptWeightRangeSettings.new,
+  name: r'promptWeightRangeSettingsProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$promptWeightRangeSettingsHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+typedef _$PromptWeightRangeSettings = Notifier<PromptWeightRange>;
 String _$imagesPerRequestHash() => r'1100f132419f744de697cc84ea53fe27a258abbd';
 
 /// 每次请求生成图片数量设置 Notifier（1-4张）

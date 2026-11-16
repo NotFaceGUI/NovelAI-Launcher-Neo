@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../data/models/prompt/prompt_weight_range.dart';
 import '../../../l10n/app_localizations.dart';
 import 'nai_syntax_controller.dart';
 import 'prompt_weight_editing.dart';
@@ -64,8 +65,12 @@ IconData tagEditorActionIcon(TagEditorAction action) => switch (action) {
 };
 
 class TagEditorCommands {
-  const TagEditorCommands(this.session);
+  const TagEditorCommands(
+    this.session, {
+    this.weightRange = PromptWeightRange.defaults,
+  });
   final TagEditorSession session;
+  final PromptWeightRange weightRange;
   bool get canAdjust =>
       session.structureComplete && session.selectedTags.isNotEmpty;
   double? get weight {
@@ -96,6 +101,7 @@ class TagEditorCommands {
         '${group.span.prefix}x${group.span.suffix}',
         value ?? weight! + step!,
         numericEmphasisEnabled: _useNumericWeight(group, numeric),
+        weightRange: weightRange,
       );
       final split = shell.indexOf('x');
       session.apply([
@@ -118,6 +124,7 @@ class TagEditorCommands {
         'x',
         value ?? 1 + step!,
         numericEmphasisEnabled: numeric && plan.numericEmphasisAllowed,
+        weightRange: weightRange,
       );
       if (shell == 'x') return;
       final split = shell.indexOf('x');
@@ -139,6 +146,7 @@ class TagEditorCommands {
                 PromptWeightEditing.parseWeightSyntax(tag.span.text).weight +
                     step!,
             numericEmphasisEnabled: _useNumericWeight(tag, numeric),
+            weightRange: weightRange,
           ),
         ),
     ]);

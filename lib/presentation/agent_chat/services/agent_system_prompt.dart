@@ -1,5 +1,6 @@
 import '../../../core/agent/agent_system_prompt.dart';
 import '../../../data/models/agent/agent_settings.dart';
+import '../../../data/models/prompt/prompt_weight_range.dart';
 
 import 'generation_toolbox.dart';
 import 'agent_research_instructions.dart';
@@ -289,6 +290,7 @@ String buildAgentSystemPrompt({
   AgentSystemPromptMode mode = AgentSystemPromptMode.append,
   List<String> enabledToolPacks = const [],
   List<String> disabledToolPacks = const [],
+  PromptWeightRange promptWeightRange = PromptWeightRange.defaults,
 }) => composeAgentSystemPrompt(
   builtInPrompt: buildAgentSystemPromptBody(webAccessEnabled: webAccessEnabled),
   customInstructions: customInstructions,
@@ -299,6 +301,7 @@ String buildAgentSystemPrompt({
     skillBlock: skillBlock,
     enabledToolPacks: enabledToolPacks,
     disabledToolPacks: disabledToolPacks,
+    promptWeightRange: promptWeightRange,
   ),
 );
 
@@ -308,6 +311,7 @@ String _buildRuntimeContext({
   required String skillBlock,
   required List<String> enabledToolPacks,
   required List<String> disabledToolPacks,
+  required PromptWeightRange promptWeightRange,
 }) {
   return [
     '<aaalice_runtime_context>',
@@ -345,6 +349,15 @@ String _buildRuntimeContext({
     ] else
       '- Web access is disabled. web_search and web_read are unavailable. '
           'Do not claim to have used them or enable them without a user request.',
+    if (!promptWeightRange.isDefault) ...[
+      '',
+      'Prompt weights:',
+      '- Keep prompt weights within '
+          '${PromptWeightRange.format(promptWeightRange.min)}–'
+          '${PromptWeightRange.format(promptWeightRange.max)}. Negative '
+          'values and values outside 0.10–3.00 must use numeric '
+          'weight::tag:: syntax.',
+    ],
     '',
     'User interaction and permissions:',
     '- Use ask_user_question for material missing preferences or choices: '

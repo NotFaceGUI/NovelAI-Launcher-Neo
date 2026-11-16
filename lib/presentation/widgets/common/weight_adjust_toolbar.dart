@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:nai_launcher/core/utils/localization_extension.dart';
 
+import '../../../data/models/prompt/prompt_weight_range.dart';
 import '../prompt/prompt_weight_editing.dart';
 import '../../adaptive/interaction_policy.dart';
 import '../../../core/utils/prompt_edit_document.dart';
@@ -45,6 +47,9 @@ class WeightAdjustToolbarWrapper extends StatefulWidget {
   /// 是否允许通过鼠标滚轮调整权重
   final bool enableWheelAdjustment;
 
+  /// 编辑允许的权重范围。
+  final PromptWeightRange weightRange;
+
   const WeightAdjustToolbarWrapper({
     super.key,
     required this.child,
@@ -52,6 +57,7 @@ class WeightAdjustToolbarWrapper extends StatefulWidget {
     this.focusNode,
     this.enabled = true,
     this.enableWheelAdjustment = true,
+    this.weightRange = PromptWeightRange.defaults,
   });
 
   @override
@@ -193,7 +199,8 @@ class _WeightAdjustToolbarWrapperState
     final result = PromptWeightEditing.parseSelection(widget.controller);
     PromptWeightEditing.applyWeight(
       widget.controller,
-      (result.weight + step).clamp(0.1, 3.0),
+      widget.weightRange.clamp(result.weight + step),
+      weightRange: widget.weightRange,
     );
     if (mounted && _toolbarVisible) {
       setState(() {});
@@ -214,7 +221,8 @@ class _WeightAdjustToolbarWrapperState
       resolvedEvent,
     ) {
       final scrollEvent = resolvedEvent as PointerScrollEvent;
-      _adjustWeightByStep(scrollEvent.scrollDelta.dy < 0 ? 0.05 : -0.05);
+      final step = _wheelWeightStep();
+      _adjustWeightByStep(scrollEvent.scrollDelta.dy < 0 ? step : -step);
       scrollEvent.respond(allowPlatformDefault: false);
     });
   }
@@ -284,6 +292,7 @@ class _WeightAdjustToolbarWrapperState
       overlaySize: layoutInfo.overlaySize,
       onClose: _hideToolbar,
       enableWheelAdjustment: widget.enableWheelAdjustment,
+      weightRange: widget.weightRange,
       onInteractingChanged: (interacting) {
         _isInteractingWithToolbar = interacting;
       },
@@ -321,6 +330,12 @@ bool supportsPromptWeightScrollPhysics(InteractionPolicy interactionPolicy) {
   return interactionPolicy.precisePointerAvailable;
 }
 
+/// Ctrl/Cmd + 滚轮按整档调整，普通滚轮保持 0.05 的细调。
+double _wheelWeightStep() {
+  final keys = HardwareKeyboard.instance;
+  return keys.isControlPressed || keys.isMetaPressed ? 1.0 : 0.05;
+}
+
 class _WeightAdjustToolbar extends StatelessWidget {
   const _WeightAdjustToolbar({
     required this.controller,
@@ -328,6 +343,7 @@ class _WeightAdjustToolbar extends StatelessWidget {
     required this.overlaySize,
     required this.onClose,
     required this.enableWheelAdjustment,
+    required this.weightRange,
     required this.onInteractingChanged,
   });
   final TextEditingController controller;
@@ -335,18 +351,22 @@ class _WeightAdjustToolbar extends StatelessWidget {
   final Size overlaySize;
   final VoidCallback onClose;
   final bool enableWheelAdjustment;
+  final PromptWeightRange weightRange;
   final ValueChanged<bool> onInteractingChanged;
 
   void _weight(double value) {
     if (PromptWeightEditing.protectNegativeBlockSyntax(controller)) {
-      PromptWeightEditing.applyWeight(controller, value);
+      PromptWeightEditing.applyWeight(
+        controller,
+        value,
+        weightRange: weightRange,
+      );
     }
   }
 
   void _step(double step) => _weight(
-    (PromptWeightEditing.parseSelection(controller).weight + step).clamp(
-      0.1,
-      3.0,
+    weightRange.clamp(
+      PromptWeightEditing.parseSelection(controller).weight + step,
     ),
   );
   void _wheel(PointerSignalEvent event) {
@@ -357,7 +377,8 @@ class _WeightAdjustToolbar extends StatelessWidget {
     }
     GestureBinding.instance.pointerSignalResolver.register(event, (resolved) {
       final scroll = resolved as PointerScrollEvent;
-      _step(scroll.scrollDelta.dy < 0 ? 0.05 : -0.05);
+      final step = _wheelWeightStep();
+      _step(scroll.scrollDelta.dy < 0 ? step : -step);
       scroll.respond(allowPlatformDefault: false);
     });
   }
@@ -405,6 +426,7 @@ class _WeightAdjustToolbar extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(6),
               child: PromptWeightControls(
+                weightRange: weightRange,
                 onClose: onClose,
                 caption:
                     caption != null &&

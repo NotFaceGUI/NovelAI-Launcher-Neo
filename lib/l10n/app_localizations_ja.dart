@@ -7771,6 +7771,16 @@ class AppLocalizationsJa extends AppLocalizations {
       'プロンプトを選択している間は、ホイールで重みだけを調整し、ページスクロールなどの操作は行いません。';
 
   @override
+  String get settings_promptWeightRange => 'プロンプトウェイト範囲';
+
+  @override
+  String get settings_promptWeightRangeSubtitle =>
+      'ウェイトスライダーと数値入力で許可する範囲を設定します。既存のプロンプトは書き換えません。';
+
+  @override
+  String get settings_promptWeightRangeReset => '既定値に戻す';
+
+  @override
   String settings_queueRetryCountMax(Object count) {
     return '最大 $count 回';
   }

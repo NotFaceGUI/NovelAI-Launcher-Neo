@@ -179,6 +179,8 @@ class StorageKeys {
   static const String sdSyntaxAutoConvert = 'sd_syntax_auto_convert';
   static const String resolveAliasOnCopy = 'resolve_alias_on_copy';
   static const String enablePromptWeightScroll = 'enable_prompt_weight_scroll';
+  static const String promptWeightMin = 'prompt_weight_min';
+  static const String promptWeightMax = 'prompt_weight_max';
   static const String promptRegexRules = 'prompt_regex_rules'; // 规则JSON字符串列表
 
   // Seed Lock Keys (种子锁定相关)
