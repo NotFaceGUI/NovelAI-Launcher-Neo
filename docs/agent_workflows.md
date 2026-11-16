@@ -20,6 +20,18 @@
 
 保存与云同步仍仅使用现有 `customSystemPrompt` 和 `systemPromptMode` 字段；自动上下文不写入自定义配置，不新增同步类型。旧自定义文本原样保留，旧客户端仍按旧版覆盖语义工作；跨设备恢复后，新客户端会重新组装本机上下文。旧文本中手写的目录或 Skills 不做猜测式删除，用户可在编辑器中清理。
 
+## Token 预算与工具集
+
+Agent 每轮都会重发系统提示词、工具 schema 与保留的历史。工具集、缓存和上下文清理共同控制这部分固定开销：
+
+- **工具集**：`agent_tool_packs.dart` 按 toolbox 分组；核心提示词、`read`、图片查看、Skills 与提问始终下发。生成、生成图操作、队列、Inpaint 与标签库（含固定标签）默认开启；画廊、Vibe/精确参考与分镜默认关闭，可在「设置 → 智能体 → 工具集」按需开启。工具包选择是本机性能偏好，不进入云同步。运行时上下文会列出已启用/已关闭的包，模型遇到缺失工具时应提示用户开启。
+- **固定前缀缓存**：Anthropic 在 tools、system 与最后一条消息上使用 `cache_control`；OpenAI 兼容/DeepSeek 依赖自动前缀缓存，因此系统提示词和工具顺序保持稳定，Skills 按名称排序后注入。缓存命中量会记录到 `Usage.cacheRead/cacheWrite`，并写入 Agent 调试日志。
+- **上下文预算**：`agent_context_budget.dart` 在没有 provider usage 锚点或压缩后锚点失效时补上系统提示词与工具 schema 的估算；有有效锚点时不重复计算。压缩参数按窗口缩放，避免 8k/16k 模型因固定 reserve 每轮触发压缩。
+- **工具结果预算**：`agent_tool_result_budget.dart` 在请求上下文边界限制单条结果的文本与图片数量；超限 JSON 会返回合法的截断说明，而不是破坏结构。截断只影响模型看到的内容，UI 与 JSONL 仍保留完整结果。
+- **旧结果清理**：`agent_context_pruner.dart` 在上下文达到约 60% 窗口时，把更早的工具结果替换为稳定占位文本并移除旧图片，只影响本次请求，不改 JSONL 或 UI 历史。边界按 `toolCallId` 记忆，避免每轮改写前缀；完整压缩仍由 compaction 兜底。
+
+验证入口：`agent_tool_packs_test.dart`、`agent_context_budget_test.dart`、`agent_context_pruner_test.dart`、`agent_tool_result_budget_test.dart`、`agent_stream_adapters_test.dart` 与 `agent_settings_section_test.dart`。
+
 ## 结构化提问
 
 `ask_user_question` 接收非空 `questions` 数组，每题包含：

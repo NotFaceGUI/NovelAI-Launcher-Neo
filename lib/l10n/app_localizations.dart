@@ -24493,6 +24493,120 @@ abstract class AppLocalizations {
   /// **'When enabled, the model can search and read public pages. Turning it off removes Web tools at runtime.'**
   String get agentSettings_webDescription;
 
+  /// No description provided for @agentSettings_toolPacks.
+  ///
+  /// In en, this message translates to:
+  /// **'Tool packs'**
+  String get agentSettings_toolPacks;
+
+  /// No description provided for @agentSettings_toolPacksDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Only send the tool schemas needed for this chat. Fewer tools means fewer input tokens on every turn.'**
+  String get agentSettings_toolPacksDescription;
+
+  /// No description provided for @agentSettings_toolPacksCoreNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Prompt editing, read, image inspection, Skills, and user questions are always available.'**
+  String get agentSettings_toolPacksCoreNote;
+
+  /// No description provided for @agentSettings_toolPackGeneration.
+  ///
+  /// In en, this message translates to:
+  /// **'Generation'**
+  String get agentSettings_toolPackGeneration;
+
+  /// No description provided for @agentSettings_toolPackGenerationDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Prepare and submit generations, reverse-engineer images, read generation settings, and manage the Image2Image source.'**
+  String get agentSettings_toolPackGenerationDescription;
+
+  /// No description provided for @agentSettings_toolPackGenerationActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Generated image actions'**
+  String get agentSettings_toolPackGenerationActions;
+
+  /// No description provided for @agentSettings_toolPackGenerationActionsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Save, favorite, select, copy, send to Krita, or open an image workflow.'**
+  String get agentSettings_toolPackGenerationActionsDescription;
+
+  /// No description provided for @agentSettings_toolPackQueue.
+  ///
+  /// In en, this message translates to:
+  /// **'Generation queue'**
+  String get agentSettings_toolPackQueue;
+
+  /// No description provided for @agentSettings_toolPackQueueDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Inspect and control queued generation tasks.'**
+  String get agentSettings_toolPackQueueDescription;
+
+  /// No description provided for @agentSettings_toolPackInpaint.
+  ///
+  /// In en, this message translates to:
+  /// **'Inpainting'**
+  String get agentSettings_toolPackInpaint;
+
+  /// No description provided for @agentSettings_toolPackInpaintDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Create and submit manual inpaint drafts, author masks, and expand the canvas.'**
+  String get agentSettings_toolPackInpaintDescription;
+
+  /// No description provided for @agentSettings_toolPackGallery.
+  ///
+  /// In en, this message translates to:
+  /// **'Galleries'**
+  String get agentSettings_toolPackGallery;
+
+  /// No description provided for @agentSettings_toolPackGalleryDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Search and browse the local and online galleries.'**
+  String get agentSettings_toolPackGalleryDescription;
+
+  /// No description provided for @agentSettings_toolPackTagLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Tag library'**
+  String get agentSettings_toolPackTagLibrary;
+
+  /// No description provided for @agentSettings_toolPackTagLibraryDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse, create, and edit reusable tag-library entries and categories; fixed tags are included.'**
+  String get agentSettings_toolPackTagLibraryDescription;
+
+  /// No description provided for @agentSettings_toolPackReferences.
+  ///
+  /// In en, this message translates to:
+  /// **'Vibe and Precise Reference'**
+  String get agentSettings_toolPackReferences;
+
+  /// No description provided for @agentSettings_toolPackReferencesDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage Vibe and Precise Reference entries and active references.'**
+  String get agentSettings_toolPackReferencesDescription;
+
+  /// No description provided for @agentSettings_toolPackStoryboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Storyboard'**
+  String get agentSettings_toolPackStoryboard;
+
+  /// No description provided for @agentSettings_toolPackStoryboardDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Create and edit storyboard pages and panels.'**
+  String get agentSettings_toolPackStoryboardDescription;
+
   /// No description provided for @agentSettings_systemPrompt.
   ///
   /// In en, this message translates to:

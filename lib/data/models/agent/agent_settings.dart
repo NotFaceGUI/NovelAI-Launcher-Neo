@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../../../presentation/prompt_assistant/models/prompt_assistant_models.dart';
+import 'agent_tool_pack.dart';
 
 const String legacyDefaultAgentChatPrompt =
     'You are a helpful assistant embedded in a NovelAI image-generation client. '
@@ -131,6 +132,7 @@ class AgentChatConfig {
     this.readingTextScale = 1.0,
     this.density = AgentChatDensity.comfortable,
     this.contextWindowOverrides = const {},
+    this.toolPackOverrides = const {},
   });
 
   static const supportedReadingTextScales = [0.9, 1.0, 1.15, 1.3];
@@ -148,6 +150,9 @@ class AgentChatConfig {
   /// （中转站、自建网关、目录未收录的新旧模型）只能靠这里拿到窗口。
   final Map<String, int> contextWindowOverrides;
 
+  /// 只保存用户显式改过的工具包；未出现的包使用 [AgentToolPack.defaultEnabled]。
+  final Map<String, bool> toolPackOverrides;
+
   /// 模型名可能自带 `/`（如 `anthropic/claude-opus-4.1`），服务商 id 不会，
   /// 所以首个 `/` 之前一定是服务商，键不会歧义。
   static String contextWindowKey(String providerId, String model) =>
@@ -155,6 +160,11 @@ class AgentChatConfig {
 
   int? contextWindowOverrideFor(String providerId, String model) =>
       contextWindowOverrides[contextWindowKey(providerId, model)];
+
+  bool isToolPackEnabled(AgentToolPack pack) {
+    if (!pack.isUserConfigurable) return pack.defaultEnabled;
+    return toolPackOverrides[pack.name] ?? pack.defaultEnabled;
+  }
 
   String behaviorInstructions({
     String? customPromptOverride,
@@ -185,6 +195,7 @@ class AgentChatConfig {
     double? readingTextScale,
     AgentChatDensity? density,
     Map<String, int>? contextWindowOverrides,
+    Map<String, bool>? toolPackOverrides,
   }) {
     return AgentChatConfig(
       modelReference: modelReference ?? this.modelReference,
@@ -197,6 +208,7 @@ class AgentChatConfig {
       density: density ?? this.density,
       contextWindowOverrides:
           contextWindowOverrides ?? this.contextWindowOverrides,
+      toolPackOverrides: toolPackOverrides ?? this.toolPackOverrides,
     );
   }
 
@@ -213,6 +225,11 @@ class AgentChatConfig {
     if (contextWindowOverrides.isNotEmpty)
       'contextWindowOverrides': Map.fromEntries(
         contextWindowOverrides.entries.toList()
+          ..sort((a, b) => a.key.compareTo(b.key)),
+      ),
+    if (toolPackOverrides.isNotEmpty)
+      'toolPackOverrides': Map.fromEntries(
+        toolPackOverrides.entries.toList()
           ..sort((a, b) => a.key.compareTo(b.key)),
       ),
   };
@@ -235,7 +252,20 @@ class AgentChatConfig {
     }
     _rejectUnknownFields(
       value,
-      schemaVersion >= 6
+      schemaVersion >= 7
+          ? const {
+              'modelReference',
+              'permissionMode',
+              'webAccessEnabled',
+              'systemPromptMode',
+              'customSystemPrompt',
+              'migratedChatRules',
+              'readingTextScale',
+              'density',
+              'contextWindowOverrides',
+              'toolPackOverrides',
+            }
+          : schemaVersion >= 6
           ? const {
               'modelReference',
               'permissionMode',
@@ -334,7 +364,46 @@ class AgentChatConfig {
             ? const <String, int>{}
             : _decodeContextWindowOverrides(value['contextWindowOverrides']),
       ),
+      toolPackOverrides: Map.unmodifiable(
+        schemaVersion < 7
+            ? const <String, bool>{}
+            : _decodeToolPackOverrides(value['toolPackOverrides']),
+      ),
     );
+  }
+
+  static Map<String, bool> _decodeToolPackOverrides(Object? value) {
+    if (value == null) return const {};
+    if (value is! Map || value.length > AgentSettings.maxToolPackOverrides) {
+      throw const FormatException(
+        'toolPackOverrides must be a bounded object.',
+      );
+    }
+    final decoded = <String, bool>{};
+    for (final entry in value.entries) {
+      final key = entry.key;
+      final enabled = entry.value;
+      if (key is! String || enabled is! bool) {
+        throw const FormatException(
+          'toolPackOverrides must map pack ids to booleans.',
+        );
+      }
+      if (key == 'library') {
+        // 兼容拆包前的开发版本：旧 library 同时包含标签库与参考库。
+        decoded.putIfAbsent(AgentToolPack.tagLibrary.name, () => enabled);
+        decoded.putIfAbsent(AgentToolPack.references.name, () => enabled);
+        continue;
+      }
+      final pack = AgentToolPack.fromStorageKey(key);
+      if (pack == null || !pack.isUserConfigurable) {
+        throw FormatException('Unknown tool pack: $key');
+      }
+      decoded[pack.name] = enabled;
+    }
+    if (decoded.length > AgentSettings.maxToolPackOverrides) {
+      throw const FormatException('Too many tool pack overrides.');
+    }
+    return decoded;
   }
 
   static Map<String, int> _decodeContextWindowOverrides(Object? value) {
@@ -371,12 +440,13 @@ class AgentSettings {
     this.skillEnabledOverrides = const {},
   });
 
-  static const int currentSchemaVersion = 6;
+  static const int currentSchemaVersion = 7;
   static const int maxCustomPromptLength = 50000;
   static const int maxSkillPreferences = 5000;
   static const int maxMigratedChatRules = 100;
   static const int maxContextWindows = 500;
   static const int maxContextWindowTokens = 20000000;
+  static const int maxToolPackOverrides = 16;
   static const int maxEncodedBytes = 1024 * 1024;
 
   final int schemaVersion;

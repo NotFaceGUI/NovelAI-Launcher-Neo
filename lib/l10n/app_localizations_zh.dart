@@ -13494,6 +13494,70 @@ class AppLocalizationsZh extends AppLocalizations {
       '开启后模型可搜索并读取公开网页；关闭后相关工具会从运行时工具表移除。';
 
   @override
+  String get agentSettings_toolPacks => '工具集';
+
+  @override
+  String get agentSettings_toolPacksDescription =>
+      '只发送本次对话需要的工具定义。工具越少，每轮消耗的输入 token 越少。';
+
+  @override
+  String get agentSettings_toolPacksCoreNote =>
+      '提示词编辑、read、图片查看、Skills 与用户提问始终可用。';
+
+  @override
+  String get agentSettings_toolPackGeneration => '生成';
+
+  @override
+  String get agentSettings_toolPackGenerationDescription =>
+      '准备/提交生成、反推图片、读取生成设置、管理图生图源图。';
+
+  @override
+  String get agentSettings_toolPackGenerationActions => '生成图操作';
+
+  @override
+  String get agentSettings_toolPackGenerationActionsDescription =>
+      '保存、收藏、选择、复制、发送到 Krita 或打开图片工作流。';
+
+  @override
+  String get agentSettings_toolPackQueue => '生成队列';
+
+  @override
+  String get agentSettings_toolPackQueueDescription => '查看并控制排队中的生成任务。';
+
+  @override
+  String get agentSettings_toolPackInpaint => '局部重绘';
+
+  @override
+  String get agentSettings_toolPackInpaintDescription =>
+      '创建/提交手绘重绘草稿、绘制蒙版、扩展画布。';
+
+  @override
+  String get agentSettings_toolPackGallery => '画廊';
+
+  @override
+  String get agentSettings_toolPackGalleryDescription => '搜索并浏览本地与在线画廊。';
+
+  @override
+  String get agentSettings_toolPackTagLibrary => '标签库';
+
+  @override
+  String get agentSettings_toolPackTagLibraryDescription =>
+      '浏览、创建和编辑可复用的标签库条目与分类；包含固定标签。';
+
+  @override
+  String get agentSettings_toolPackReferences => 'Vibe 与精确参考';
+
+  @override
+  String get agentSettings_toolPackReferencesDescription =>
+      '管理 Vibe、精确参考条目及其启用状态。';
+
+  @override
+  String get agentSettings_toolPackStoryboard => '分镜';
+
+  @override
+  String get agentSettings_toolPackStoryboardDescription => '创建并编辑分镜页面与面板。';
+
+  @override
   String get agentSettings_systemPrompt => '系统提示词';
 
   @override
@@ -29008,6 +29072,70 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   @override
   String get agentSettings_webDescription =>
       '開啟後模型可搜尋並讀取公開網頁；關閉後相關工具會從執行階段工具表移除。';
+
+  @override
+  String get agentSettings_toolPacks => '工具集';
+
+  @override
+  String get agentSettings_toolPacksDescription =>
+      '只傳送本次對話需要的工具定義。工具越少，每輪消耗的輸入 token 越少。';
+
+  @override
+  String get agentSettings_toolPacksCoreNote =>
+      '提示詞編輯、read、圖片檢視、Skills 與使用者提問始終可用。';
+
+  @override
+  String get agentSettings_toolPackGeneration => '生成';
+
+  @override
+  String get agentSettings_toolPackGenerationDescription =>
+      '準備/提交生成、反推圖片、讀取生成設定、管理圖生圖來源圖片。';
+
+  @override
+  String get agentSettings_toolPackGenerationActions => '生成圖片操作';
+
+  @override
+  String get agentSettings_toolPackGenerationActionsDescription =>
+      '儲存、收藏、選取、複製、傳送到 Krita 或開啟圖片工作流程。';
+
+  @override
+  String get agentSettings_toolPackQueue => '生成佇列';
+
+  @override
+  String get agentSettings_toolPackQueueDescription => '檢視並控制排隊中的生成任務。';
+
+  @override
+  String get agentSettings_toolPackInpaint => '局部重繪';
+
+  @override
+  String get agentSettings_toolPackInpaintDescription =>
+      '建立/提交手繪重繪草稿、繪製遮罩、擴展畫布。';
+
+  @override
+  String get agentSettings_toolPackGallery => '畫廊';
+
+  @override
+  String get agentSettings_toolPackGalleryDescription => '搜尋並瀏覽本機與線上畫廊。';
+
+  @override
+  String get agentSettings_toolPackTagLibrary => '標籤庫';
+
+  @override
+  String get agentSettings_toolPackTagLibraryDescription =>
+      '瀏覽、建立和編輯可重複使用的標籤庫項目與分類；包含固定標籤。';
+
+  @override
+  String get agentSettings_toolPackReferences => 'Vibe 與精確參考';
+
+  @override
+  String get agentSettings_toolPackReferencesDescription =>
+      '管理 Vibe、精確參考項目及其啟用狀態。';
+
+  @override
+  String get agentSettings_toolPackStoryboard => '分鏡';
+
+  @override
+  String get agentSettings_toolPackStoryboardDescription => '建立並編輯分鏡頁面與面板。';
 
   @override
   String get agentSettings_systemPrompt => '系統提示詞';

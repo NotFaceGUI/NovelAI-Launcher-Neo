@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nai_launcher/data/models/agent/agent_settings.dart';
+import 'package:nai_launcher/data/models/agent/agent_tool_pack.dart';
 import 'package:nai_launcher/presentation/prompt_assistant/models/prompt_assistant_models.dart';
 
 void main() {
@@ -304,6 +305,91 @@ void main() {
         final raw = const AgentSettings().toJson();
         (raw['chat']! as Map<String, dynamic>)['contextWindowOverrides'] =
             broken;
+        expect(
+          () => AgentSettings.decode(jsonEncode(raw)),
+          throwsFormatException,
+          reason: '$broken',
+        );
+      }
+    });
+
+    test('tool packs default to the compact profile', () {
+      const config = AgentChatConfig();
+      for (final pack in const [
+        AgentToolPack.core,
+        AgentToolPack.generation,
+        AgentToolPack.generationActions,
+        AgentToolPack.queue,
+        AgentToolPack.inpaint,
+        AgentToolPack.tagLibrary,
+        AgentToolPack.web,
+      ]) {
+        expect(config.isToolPackEnabled(pack), isTrue, reason: pack.name);
+      }
+      for (final pack in const [
+        AgentToolPack.gallery,
+        AgentToolPack.references,
+        AgentToolPack.storyboard,
+      ]) {
+        expect(config.isToolPackEnabled(pack), isFalse, reason: pack.name);
+      }
+    });
+
+    test('round-trips explicit tool pack overrides', () {
+      const settings = AgentSettings(
+        chat: AgentChatConfig(
+          toolPackOverrides: {'gallery': true, 'queue': false},
+        ),
+      );
+
+      final decoded = AgentSettings.decode(settings.encode());
+
+      expect(decoded.chat.isToolPackEnabled(AgentToolPack.gallery), isTrue);
+      expect(decoded.chat.isToolPackEnabled(AgentToolPack.queue), isFalse);
+      expect(decoded.chat.isToolPackEnabled(AgentToolPack.tagLibrary), isTrue);
+      expect(decoded.chat.isToolPackEnabled(AgentToolPack.references), isFalse);
+      expect(decoded.chat.isToolPackEnabled(AgentToolPack.storyboard), isFalse);
+    });
+
+    test('migrates the pre-split library pack override', () {
+      final raw = const AgentSettings().toJson();
+      (raw['chat']! as Map<String, dynamic>)['toolPackOverrides'] = {
+        'library': true,
+      };
+
+      final decoded = AgentSettings.decode(jsonEncode(raw));
+
+      expect(decoded.chat.isToolPackEnabled(AgentToolPack.tagLibrary), isTrue);
+      expect(decoded.chat.isToolPackEnabled(AgentToolPack.references), isTrue);
+    });
+
+    test('omits an empty tool pack map', () {
+      final encoded =
+          const AgentSettings().toJson()['chat']! as Map<String, dynamic>;
+      expect(encoded, isNot(contains('toolPackOverrides')));
+    });
+
+    test('rejects tool pack overrides stored before schema 7', () {
+      final raw = const AgentSettings(
+        chat: AgentChatConfig(toolPackOverrides: {'gallery': true}),
+      ).toJson();
+      raw['schemaVersion'] = 6;
+
+      expect(
+        () => AgentSettings.decode(jsonEncode(raw)),
+        throwsFormatException,
+      );
+    });
+
+    test('rejects unknown or non-configurable tool packs', () {
+      for (final broken in <Object>[
+        {'unknown': true},
+        {'core': false},
+        {'web': false},
+        {'gallery': 'yes'},
+      ]) {
+        final raw = const AgentSettings().toJson();
+        (raw['chat']! as Map<String, dynamic>)['toolPackOverrides'] = broken;
         expect(
           () => AgentSettings.decode(jsonEncode(raw)),
           throwsFormatException,

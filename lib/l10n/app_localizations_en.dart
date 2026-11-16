@@ -14108,6 +14108,74 @@ class AppLocalizationsEn extends AppLocalizations {
       'When enabled, the model can search and read public pages. Turning it off removes Web tools at runtime.';
 
   @override
+  String get agentSettings_toolPacks => 'Tool packs';
+
+  @override
+  String get agentSettings_toolPacksDescription =>
+      'Only send the tool schemas needed for this chat. Fewer tools means fewer input tokens on every turn.';
+
+  @override
+  String get agentSettings_toolPacksCoreNote =>
+      'Prompt editing, read, image inspection, Skills, and user questions are always available.';
+
+  @override
+  String get agentSettings_toolPackGeneration => 'Generation';
+
+  @override
+  String get agentSettings_toolPackGenerationDescription =>
+      'Prepare and submit generations, reverse-engineer images, read generation settings, and manage the Image2Image source.';
+
+  @override
+  String get agentSettings_toolPackGenerationActions =>
+      'Generated image actions';
+
+  @override
+  String get agentSettings_toolPackGenerationActionsDescription =>
+      'Save, favorite, select, copy, send to Krita, or open an image workflow.';
+
+  @override
+  String get agentSettings_toolPackQueue => 'Generation queue';
+
+  @override
+  String get agentSettings_toolPackQueueDescription =>
+      'Inspect and control queued generation tasks.';
+
+  @override
+  String get agentSettings_toolPackInpaint => 'Inpainting';
+
+  @override
+  String get agentSettings_toolPackInpaintDescription =>
+      'Create and submit manual inpaint drafts, author masks, and expand the canvas.';
+
+  @override
+  String get agentSettings_toolPackGallery => 'Galleries';
+
+  @override
+  String get agentSettings_toolPackGalleryDescription =>
+      'Search and browse the local and online galleries.';
+
+  @override
+  String get agentSettings_toolPackTagLibrary => 'Tag library';
+
+  @override
+  String get agentSettings_toolPackTagLibraryDescription =>
+      'Browse, create, and edit reusable tag-library entries and categories; fixed tags are included.';
+
+  @override
+  String get agentSettings_toolPackReferences => 'Vibe and Precise Reference';
+
+  @override
+  String get agentSettings_toolPackReferencesDescription =>
+      'Manage Vibe and Precise Reference entries and active references.';
+
+  @override
+  String get agentSettings_toolPackStoryboard => 'Storyboard';
+
+  @override
+  String get agentSettings_toolPackStoryboardDescription =>
+      'Create and edit storyboard pages and panels.';
+
+  @override
   String get agentSettings_systemPrompt => 'System prompt';
 
   @override

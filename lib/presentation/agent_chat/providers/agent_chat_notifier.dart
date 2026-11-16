@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,6 +23,7 @@ import '../../../core/storage/local_storage_service.dart';
 import '../../../core/services/android_foreground_task_service.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../data/models/agent/agent_settings.dart';
+import '../../../data/models/agent/agent_tool_pack.dart';
 import '../../../data/models/interaction/user_question.dart';
 import '../../../data/models/inpaint/inpaint_draft.dart';
 import '../../../data/repositories/gallery_folder_repository.dart';
@@ -39,6 +41,8 @@ import '../../providers/tag_library_page_provider.dart';
 import '../../providers/vibe_library_provider.dart';
 import '../../router/app_router_config.dart';
 import '../services/agent_api_client.dart';
+import '../services/agent_context_budget.dart';
+import '../services/agent_context_pruner.dart';
 import '../services/agent_chat_draft_controller.dart';
 import '../services/agent_chat_event_controller.dart';
 import '../services/agent_chat_session_controller.dart';
@@ -52,6 +56,7 @@ import '../services/manual_inpaint_toolbox.dart';
 import '../services/queue_toolbox.dart';
 import '../services/storyboard_toolbox.dart';
 import '../services/agent_tool_permission_controller.dart';
+import '../services/agent_tool_result_budget.dart';
 import '../services/agent_tool_registry_builder.dart';
 import '../services/agent_user_question_controller.dart';
 import 'agent_chat_state.dart';
@@ -142,6 +147,9 @@ class AgentChatNotifier extends StateNotifier<AgentChatState> {
   final GenerationPreparationRuntime _generationPreparationRuntime =
       GenerationPreparationRuntime();
   final QueueControlRuntime _queueControlRuntime = QueueControlRuntime();
+  final AgentContextPruner _contextPruner = AgentContextPruner();
+  String? _prunerSessionId;
+  int? _prunerContextWindow;
   Future<void>? _initializing;
   bool _usesPresetSkills = false;
   bool _runtimeReady = false;
@@ -367,7 +375,20 @@ class AgentChatNotifier extends StateNotifier<AgentChatState> {
       permissionMode: permissionMode,
     );
     _permissionController!.configure(registry);
-    return registry.tools;
+    final tools = registry.tools;
+    var schemaChars = 0;
+    for (final tool in tools) {
+      schemaChars +=
+          tool.name.length +
+          tool.description.length +
+          jsonEncode(tool.parameters).length;
+    }
+    AppLogger.d(
+      'agent tools=${tools.length} schemaChars=$schemaChars '
+          '(${(schemaChars / 4).ceil()} estimated tokens)',
+      'AgentChat',
+    );
+    return tools;
   }
 
   Future<void> _refreshWebAccessTools() async {
@@ -514,27 +535,52 @@ class AgentChatNotifier extends StateNotifier<AgentChatState> {
     bool force = false,
   }) async {
     ({List<AgentMessage> messages, AgentChatCompactionOutcome outcome}) skip(
+      List<AgentMessage> current,
       AgentChatCompactionSkipReason reason,
-    ) => (messages: messages, outcome: AgentChatCompactionSkipped(reason));
+    ) => (messages: current, outcome: AgentChatCompactionSkipped(reason));
 
+    var current = messages;
     try {
       final route = _activeRoute ?? _routeCache ?? _resolveRoute();
       final session = _sessionController.session;
       if (route == null || session == null) {
-        return skip(AgentChatCompactionSkipReason.unavailable);
+        return skip(current, AgentChatCompactionSkipReason.unavailable);
       }
       final contextWindow = _modelCapability(route).model.contextWindow;
       if (contextWindow <= 0) {
-        return skip(AgentChatCompactionSkipReason.unavailable);
+        return skip(current, AgentChatCompactionSkipReason.unavailable);
       }
-      const settings = defaultCompactionSettings;
+      final settings = resolveCompactionSettings(contextWindow);
+      final sessionId = state.activeSessionId;
+      if (_prunerSessionId != sessionId ||
+          _prunerContextWindow != contextWindow) {
+        _contextPruner.reset();
+        _prunerSessionId = sessionId;
+        _prunerContextWindow = contextWindow;
+      }
+      final agent = _sessionController.agent;
+      final budget = AgentContextBudget.forRequest(
+        contextWindow: contextWindow,
+        systemPrompt: agent?.state.systemPrompt ?? '',
+        tools: agent?.state.tools,
+      );
+      var requestTokens = budget.estimateRequestTokens(current);
+      current = _contextPruner.prune(
+        current,
+        contextWindow: contextWindow,
+        keepRecentTokens: settings.keepRecentTokens,
+        requestTokens: requestTokens,
+      );
+      current = budgetToolResultMessages(current);
+      if (!identical(current, messages)) {
+        requestTokens = budget.estimateFullRequestTokens(current);
+      }
       // 自动压缩不值得为极短会话去查询整条分支；手动触发由下面的真实谓词判定。
       if (!force && messages.length <= 8) {
-        return skip(AgentChatCompactionSkipReason.nothingToCompact);
+        return skip(current, AgentChatCompactionSkipReason.nothingToCompact);
       }
-      final estimate = estimateContextTokens(messages);
-      if (!force && !shouldCompact(estimate.tokens, contextWindow, settings)) {
-        return skip(AgentChatCompactionSkipReason.nothingToCompact);
+      if (!force && !shouldCompact(requestTokens, contextWindow, settings)) {
+        return skip(current, AgentChatCompactionSkipReason.nothingToCompact);
       }
 
       state = state.copyWith(compacting: true);
@@ -549,7 +595,7 @@ class AgentChatNotifier extends StateNotifier<AgentChatState> {
       // 而 compact 会拿空列表去请求摘要并用结果覆盖上下文，必须在此挡掉。
       if (preparation == null || !_hasSummarizableHistory(preparation)) {
         state = state.copyWith(compacting: false);
-        return skip(AgentChatCompactionSkipReason.nothingToCompact);
+        return skip(current, AgentChatCompactionSkipReason.nothingToCompact);
       }
       final result = await compact(
         preparation,
@@ -568,7 +614,7 @@ class AgentChatNotifier extends StateNotifier<AgentChatState> {
       if (compactResult == null) {
         final error = result.errorOrNull;
         return (
-          messages: messages,
+          messages: current,
           outcome: AgentChatCompactionFailed(
             error == null ? '' : error.message,
           ),
@@ -600,6 +646,9 @@ class AgentChatNotifier extends StateNotifier<AgentChatState> {
       messages
         ..clear()
         ..addAll(compressed);
+      _contextPruner.reset();
+      _prunerSessionId = sessionId;
+      _prunerContextWindow = contextWindow;
       _sessionController.agent?.state.messages = List.of(compressed);
       if (compactResult.usage != null) {
         _sessionController.totalUsage =
@@ -626,7 +675,7 @@ class AgentChatNotifier extends StateNotifier<AgentChatState> {
     } catch (e) {
       AppLogger.w('agent compaction skipped: $e', 'AgentChat');
       state = state.copyWith(compacting: false);
-      return (messages: messages, outcome: AgentChatCompactionFailed('$e'));
+      return (messages: current, outcome: AgentChatCompactionFailed('$e'));
     }
   }
 
@@ -682,12 +731,22 @@ class AgentChatNotifier extends StateNotifier<AgentChatState> {
           capability,
           context.messages,
           options?.maxTokens,
+          systemPrompt: context.systemPrompt,
+          tools: context.tools,
         ),
         modelMaxOutputTokens: capability.metadata.maxOutputTokens,
         reasoning: options?.reasoning,
         reasoningRequest: capability.resolveReasoningRequest(
           options?.reasoning,
         ),
+      );
+      final contextWindow = capability.metadata.contextWindow;
+      AppLogger.d(
+        'agent request messages=${context.messages.length} '
+            'tools=${context.tools?.length ?? 0} '
+            'systemChars=${context.systemPrompt.length} '
+            'estimatedInput=${AgentContextBudget.forRequest(contextWindow: contextWindow, systemPrompt: context.systemPrompt, tools: context.tools).estimateRequestTokens(context.messages)}',
+        'AgentChat',
       );
       final wireEvents =
           _completeRequest?.call(request) ?? _client.complete(request);
@@ -708,8 +767,10 @@ class AgentChatNotifier extends StateNotifier<AgentChatState> {
   static int? _clampMaxOutputTokens(
     AgentChatModelCapability capability,
     List<Message> messages,
-    int? requested,
-  ) {
+    int? requested, {
+    required String systemPrompt,
+    required List<Tool>? tools,
+  }) {
     final modelMax = capability.metadata.maxOutputTokens;
     if (requested == null && modelMax <= 0) return null;
 
@@ -718,9 +779,13 @@ class AgentChatNotifier extends StateNotifier<AgentChatState> {
 
     final contextWindow = capability.metadata.contextWindow;
     if (contextWindow > 0) {
-      const contextSafetyTokens = 4096;
-      final used = estimateContextTokens(messages).tokens;
-      final available = contextWindow - used - contextSafetyTokens;
+      final used = AgentContextBudget.forRequest(
+        contextWindow: contextWindow,
+        systemPrompt: systemPrompt,
+        tools: tools,
+      ).estimateRequestTokens(messages);
+      final safety = resolveOutputSafetyTokens(contextWindow);
+      final available = contextWindow - used - safety;
       final contextMax = available < 1 ? 1 : available;
       if (result > contextMax) result = contextMax;
     }
@@ -813,9 +878,23 @@ class AgentChatNotifier extends StateNotifier<AgentChatState> {
         _routeCache = resolvedRoute;
       }
     }
-    final skillBlock = formatSkillsForSystemPrompt(
-      (skillsOverride ?? _skills.values).toList(growable: false),
-    );
+    // Stable order keeps the cached prompt prefix byte-identical across turns.
+    final skills = (skillsOverride ?? _skills.values).toList(growable: false)
+      ..sort((a, b) => a.name.compareTo(b.name));
+    final skillBlock = formatSkillsForSystemPrompt(skills);
+    final enabledToolPacks = <String>[
+      for (final pack in AgentToolPack.values)
+        if (pack != AgentToolPack.web &&
+            agentSettings.chat.isToolPackEnabled(pack))
+          pack.name,
+      if (agentSettings.chat.webAccessEnabled) AgentToolPack.web.name,
+    ];
+    final disabledToolPacks = <String>[
+      for (final pack in AgentToolPack.values)
+        if (pack.isUserConfigurable &&
+            !agentSettings.chat.isToolPackEnabled(pack))
+          pack.name,
+    ];
     return buildAgentSystemPrompt(
       workspacePath: _workspaceDir.path,
       webAccessEnabled: agentSettings.chat.webAccessEnabled,
@@ -825,6 +904,8 @@ class AgentChatNotifier extends StateNotifier<AgentChatState> {
         modeOverride: modeOverride,
       ),
       mode: modeOverride ?? agentSettings.chat.systemPromptMode,
+      enabledToolPacks: enabledToolPacks,
+      disabledToolPacks: disabledToolPacks,
     );
   }
 

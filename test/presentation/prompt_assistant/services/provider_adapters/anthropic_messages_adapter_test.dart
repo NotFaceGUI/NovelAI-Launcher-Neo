@@ -59,7 +59,51 @@ void main() {
     expect(images.length, 2);
     expect((images[0]['source'] as Map)['data'], first);
     expect((images[1]['source'] as Map)['data'], second);
-    expect(content.last, {'type': 'text', 'text': 'compare these'});
+    expect(content.last, {
+      'type': 'text',
+      'text': 'compare these',
+      'cache_control': {'type': 'ephemeral'},
+    });
+  });
+
+  test('agent payload adds ordered cache breakpoints', () {
+    const adapter = AnthropicMessagesAdapter();
+    final request = AgentChatRequest(
+      sessionId: 'session',
+      provider: const ProviderConfig(
+        id: 'anthropic',
+        name: 'Anthropic',
+        protocol: ProviderProtocol.anthropicMessages,
+        baseUrl: 'https://api.anthropic.com',
+      ),
+      model: 'claude-test',
+      systemPrompt: 'system',
+      messages: [UserMessage.text('hello')],
+      tools: const [
+        Tool(
+          name: 'read',
+          description: 'Read a file',
+          parameters: {'type': 'object'},
+        ),
+        Tool(
+          name: 'write',
+          description: 'Write a file',
+          parameters: {'type': 'object'},
+        ),
+      ],
+      apiKey: 'key',
+    );
+
+    final payload = adapter.buildAgentPayload(request);
+    final tools = payload['tools'] as List;
+    final system = payload['system'] as List;
+    final content =
+        ((payload['messages'] as List).single as Map)['content'] as List;
+
+    expect((tools.last as Map)['cache_control'], {'type': 'ephemeral'});
+    expect((tools.first as Map).containsKey('cache_control'), isFalse);
+    expect((system.single as Map)['cache_control'], {'type': 'ephemeral'});
+    expect((content.last as Map)['cache_control'], {'type': 'ephemeral'});
   });
 
   test('agent payload maps reasoning effort to a valid thinking budget', () {

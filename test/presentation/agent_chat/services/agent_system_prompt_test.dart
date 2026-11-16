@@ -181,4 +181,19 @@ void main() {
     expect(prompt, contains('clear_generation_source_image'));
     expect(prompt, contains('update_generation_source_settings'));
   });
+
+  test('tool pack state is summarized in the runtime context', () {
+    final prompt = buildAgentSystemPrompt(
+      workspacePath: 'workspace',
+      webAccessEnabled: false,
+      skillBlock: '',
+      enabledToolPacks: const ['core', 'generation', 'queue', 'tagLibrary'],
+      disabledToolPacks: const ['gallery', 'references', 'storyboard'],
+    );
+
+    expect(prompt, contains('<tool_packs>'));
+    expect(prompt, contains('Enabled: core, generation, queue, tagLibrary'));
+    expect(prompt, contains('Disabled: gallery, references, storyboard'));
+    expect(prompt, contains('Settings > Agent > Tool packs'));
+  });
 }

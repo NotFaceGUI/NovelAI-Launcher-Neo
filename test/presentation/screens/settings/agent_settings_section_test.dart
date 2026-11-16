@@ -15,11 +15,13 @@ import 'package:nai_launcher/core/constants/storage_keys.dart';
 import 'package:nai_launcher/core/storage/local_storage_service.dart';
 import 'package:nai_launcher/core/storage/secure_storage_service.dart';
 import 'package:nai_launcher/data/models/agent/agent_settings.dart';
+import 'package:nai_launcher/data/models/agent/agent_tool_pack.dart';
 import 'package:nai_launcher/l10n/app_localizations.dart';
 import 'package:nai_launcher/presentation/agent_settings/providers/agent_settings_provider.dart';
 import 'package:nai_launcher/presentation/prompt_assistant/models/prompt_assistant_models.dart';
 import 'package:nai_launcher/presentation/screens/settings/sections/agent/agent_profile_actions.dart';
 import 'package:nai_launcher/presentation/screens/settings/sections/agent/skill_management_panel.dart';
+import 'package:nai_launcher/presentation/screens/settings/sections/agent/tool_packs_card.dart';
 import 'package:nai_launcher/presentation/screens/settings/sections/agent_settings_section.dart';
 import 'package:nai_launcher/presentation/screens/settings/widgets/settings_card.dart';
 import 'package:nai_launcher/presentation/screens/settings/widgets/settings_page_layout.dart';
@@ -1012,6 +1014,119 @@ void main() {
         await tester.pumpAndSettle();
       }
     } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      container.dispose();
+      await tester.binding.setSurfaceSize(null);
+      root.deleteSync(recursive: true);
+    }
+  });
+
+  testWidgets('工具集卡片在窄屏和 3x 文本下可切换扩展包', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    await tester.binding.setSurfaceSize(const Size(390, 820));
+    final root = Directory('tool/.tmp/agent-tool-packs-test')
+      ..createSync(recursive: true);
+    final storage = _MemoryLocalStorage();
+    final container = ProviderContainer(
+      overrides: [
+        localStorageServiceProvider.overrideWithValue(storage),
+        secureStorageServiceProvider.overrideWithValue(_MemorySecureStorage()),
+        agentSettingsProvider.overrideWith(
+          (ref) => AgentSettingsNotifier(
+            ref,
+            supportDirectory: root,
+            workspaceDirectory: root,
+            environment: const {},
+            skillCatalogService: const _EmptySkillCatalogService(),
+          ),
+        ),
+      ],
+    );
+
+    try {
+      await tester.runAsync(() async {
+        container.read(agentSettingsProvider);
+        for (var attempt = 0; attempt < 100; attempt++) {
+          if (container.read(agentSettingsProvider).initialized) return;
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+        fail('Agent settings did not initialize.');
+      });
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            locale: const Locale('zh'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: const TextScaler.linear(3)),
+              child: child!,
+            ),
+            home: Scaffold(
+              body: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Consumer(
+                  builder: (context, ref, _) => AgentToolPacksCard(
+                    settings: ref.watch(agentSettingsProvider).settings,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final gallery = find.byKey(const ValueKey('agent-tool-pack-gallery'));
+      final references = find.byKey(
+        const ValueKey('agent-tool-pack-references'),
+      );
+      final tagLibrary = find.byKey(
+        const ValueKey('agent-tool-pack-tagLibrary'),
+      );
+      final storyboard = find.byKey(
+        const ValueKey('agent-tool-pack-storyboard'),
+      );
+      expect(gallery, findsOneWidget);
+      expect(references, findsOneWidget);
+      expect(tagLibrary, findsOneWidget);
+      expect(storyboard, findsOneWidget);
+      expect(tester.widget<SwitchListTile>(gallery).value, isFalse);
+      expect(tester.widget<SwitchListTile>(references).value, isFalse);
+      expect(tester.widget<SwitchListTile>(tagLibrary).value, isTrue);
+      expect(tester.widget<SwitchListTile>(storyboard).value, isFalse);
+      expect(tester.takeException(), isNull);
+
+      tester.widget<SwitchListTile>(gallery).onChanged!(true);
+      await tester.runAsync(() async {
+        for (var attempt = 0; attempt < 50; attempt++) {
+          if (container
+              .read(agentSettingsProvider)
+              .settings
+              .chat
+              .isToolPackEnabled(AgentToolPack.gallery)) {
+            return;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+      await tester.pumpAndSettle();
+
+      expect(
+        container
+            .read(agentSettingsProvider)
+            .settings
+            .chat
+            .isToolPackEnabled(AgentToolPack.gallery),
+        isTrue,
+      );
+      expect(tester.widget<SwitchListTile>(gallery).value, isTrue);
+      expect(tester.takeException(), isNull);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
       await tester.pumpWidget(const SizedBox.shrink());
       container.dispose();
       await tester.binding.setSurfaceSize(null);

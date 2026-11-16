@@ -9,15 +9,16 @@ import '../../../prompt_assistant/models/assistant_model_capability.dart';
 import '../../../agent_settings/providers/agent_settings_provider.dart';
 import '../../../prompt_assistant/models/prompt_assistant_models.dart';
 import '../../../prompt_assistant/providers/prompt_assistant_config_provider.dart';
-import '../../../widgets/common/app_toast.dart';
 import '../../../widgets/common/searchable_model_picker.dart';
 import '../widgets/settings_card.dart';
 import '../widgets/settings_page_layout.dart';
 import 'web_access_settings.dart';
 import 'agent/agent_profile_actions.dart';
+import 'agent/agent_settings_feedback.dart';
 import 'agent/context_window_field.dart';
 import 'agent/skill_management_panel.dart';
 import 'agent/system_prompt_editor.dart';
+import 'agent/tool_packs_card.dart';
 
 class AgentSettingsSection extends ConsumerStatefulWidget {
   const AgentSettingsSection({super.key, this.onOpenIntegrations});
@@ -110,6 +111,7 @@ class _AgentSettingsSectionState extends ConsumerState<AgentSettingsSection> {
         _ReadingPreferencesCard(settings: state.settings),
         _PermissionCard(settings: state.settings),
         _WebAccessCard(settings: state.settings),
+        AgentToolPacksCard(settings: state.settings),
         if (_selectedPanel == 0)
           AgentSystemPromptEditor(panelSelector: panelSelector)
         else
@@ -213,7 +215,7 @@ class _ModelCard extends ConsumerWidget {
               helperText: context.l10n.agentSettings_modelManagedInIntegrations,
             ),
             onSelected: (value) {
-              _reportAgentSettingFailure(
+              reportAgentSettingFailure(
                 context,
                 ref
                     .read(agentSettingsProvider.notifier)
@@ -311,7 +313,7 @@ class _ReadingPreferencesCard extends ConsumerWidget {
               ],
               selected: {chat.readingTextScale},
               showSelectedIcon: false,
-              onSelectionChanged: (selection) => _reportAgentSettingFailure(
+              onSelectionChanged: (selection) => reportAgentSettingFailure(
                 context,
                 ref
                     .read(agentSettingsProvider.notifier)
@@ -347,7 +349,7 @@ class _ReadingPreferencesCard extends ConsumerWidget {
               ],
               selected: {chat.density},
               showSelectedIcon: false,
-              onSelectionChanged: (selection) => _reportAgentSettingFailure(
+              onSelectionChanged: (selection) => reportAgentSettingFailure(
                 context,
                 ref
                     .read(agentSettingsProvider.notifier)
@@ -375,7 +377,7 @@ class _PermissionCard extends ConsumerWidget {
         groupValue: settings.chat.permissionMode,
         onChanged: (value) {
           if (value != null) {
-            _reportAgentSettingFailure(
+            reportAgentSettingFailure(
               context,
               ref.read(agentSettingsProvider.notifier).setPermissionMode(value),
             );
@@ -446,7 +448,7 @@ class _WebAccessCard extends ConsumerWidget {
           value: settings.chat.webAccessEnabled,
           title: Text(context.l10n.agentSettings_webEnabled),
           subtitle: Text(context.l10n.agentSettings_webDescription),
-          onChanged: (value) => _reportAgentSettingFailure(
+          onChanged: (value) => reportAgentSettingFailure(
             context,
             ref.read(agentSettingsProvider.notifier).setWebAccessEnabled(value),
           ),
@@ -458,20 +460,4 @@ class _WebAccessCard extends ConsumerWidget {
       ],
     ),
   );
-}
-
-Future<void> _reportAgentSettingFailure(
-  BuildContext context,
-  Future<void> operation,
-) async {
-  try {
-    await operation;
-  } catch (error) {
-    if (context.mounted) {
-      AppToast.error(
-        context,
-        context.l10n.agentSettings_operationFailed(error.toString()),
-      );
-    }
-  }
 }

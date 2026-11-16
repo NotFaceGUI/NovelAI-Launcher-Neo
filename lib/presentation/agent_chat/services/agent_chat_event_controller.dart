@@ -4,6 +4,7 @@ import '../../../core/agent/agent.dart';
 import '../../../core/agent/context_usage.dart';
 import '../../../core/agent/harness/session/session_types.dart'
     as session_types;
+import '../../../core/utils/app_logger.dart';
 import '../models/agent_chat_prompt_envelope.dart';
 import '../providers/agent_chat_state.dart';
 import 'agent_chat_session_controller.dart';
@@ -101,8 +102,14 @@ class AgentChatEventController {
           }
         }
         if (message is AssistantMessage && message.usage != null) {
-          _sessionController.totalUsage =
-              _sessionController.totalUsage + message.usage!;
+          final usage = message.usage!;
+          _sessionController.totalUsage = _sessionController.totalUsage + usage;
+          AppLogger.d(
+            'agent usage input=${usage.input} output=${usage.output} '
+                'cacheRead=${usage.cacheRead} cacheWrite=${usage.cacheWrite} '
+                'total=${usage.totalTokens}',
+            'AgentChat',
+          );
         }
         final current = _readState();
         final contextUsage = resolveAgentContextUsage(

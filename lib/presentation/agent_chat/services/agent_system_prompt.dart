@@ -287,6 +287,8 @@ String buildAgentSystemPrompt({
   required String skillBlock,
   String customInstructions = '',
   AgentSystemPromptMode mode = AgentSystemPromptMode.append,
+  List<String> enabledToolPacks = const [],
+  List<String> disabledToolPacks = const [],
 }) => composeAgentSystemPrompt(
   builtInPrompt: buildAgentSystemPromptBody(webAccessEnabled: webAccessEnabled),
   customInstructions: customInstructions,
@@ -295,6 +297,8 @@ String buildAgentSystemPrompt({
     workspacePath: workspacePath,
     webAccessEnabled: webAccessEnabled,
     skillBlock: skillBlock,
+    enabledToolPacks: enabledToolPacks,
+    disabledToolPacks: disabledToolPacks,
   ),
 );
 
@@ -302,6 +306,8 @@ String _buildRuntimeContext({
   required String workspacePath,
   required bool webAccessEnabled,
   required String skillBlock,
+  required List<String> enabledToolPacks,
+  required List<String> disabledToolPacks,
 }) {
   return [
     '<aaalice_runtime_context>',
@@ -355,6 +361,17 @@ String _buildRuntimeContext({
         'approval UI, and never disguise a permission request as a preference '
         'question. Stay within the user\'s actual task scope.',
     if (skillBlock.isNotEmpty) ...['', skillBlock],
+    if (enabledToolPacks.isNotEmpty || disabledToolPacks.isNotEmpty) ...[
+      '',
+      '<tool_packs>',
+      'Enabled: ${enabledToolPacks.join(', ')}',
+      if (disabledToolPacks.isNotEmpty)
+        'Disabled: ${disabledToolPacks.join(', ')}',
+      'Only tools present in the tool definitions are available. If a task '
+          'needs a disabled tool pack, ask the user to enable it in '
+          'Settings > Agent > Tool packs.',
+      '</tool_packs>',
+    ],
     '',
     '</aaalice_runtime_context>',
   ].join('\n');

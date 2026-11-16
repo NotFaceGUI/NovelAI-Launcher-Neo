@@ -207,10 +207,24 @@ class OpenAiResponsesAdapter extends PromptAssistantProviderAdapter {
               }
               final usageRaw = response['usage'];
               if (usageRaw is Map<String, dynamic>) {
+                final input = (usageRaw['input_tokens'] as num?)?.toInt() ?? 0;
+                final output =
+                    (usageRaw['output_tokens'] as num?)?.toInt() ?? 0;
+                final details = usageRaw['input_tokens_details'];
+                final cached = details is Map<String, dynamic>
+                    ? (details['cached_tokens'] as num?)?.toInt()
+                    : null;
+                final cacheWrite = details is Map<String, dynamic>
+                    ? (details['cache_write_tokens'] as num?)?.toInt()
+                    : null;
                 usage = Usage(
-                  input: (usageRaw['input_tokens'] as num?)?.toInt() ?? 0,
-                  output: (usageRaw['output_tokens'] as num?)?.toInt() ?? 0,
-                  totalTokens: (usageRaw['total_tokens'] as num?)?.toInt() ?? 0,
+                  input: input,
+                  output: output,
+                  cacheRead: cached ?? 0,
+                  cacheWrite: cacheWrite ?? 0,
+                  totalTokens:
+                      (usageRaw['total_tokens'] as num?)?.toInt() ??
+                      (input + output),
                 );
               }
             }

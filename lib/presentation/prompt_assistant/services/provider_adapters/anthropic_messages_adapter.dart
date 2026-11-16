@@ -102,8 +102,18 @@ class AnthropicMessagesAdapter extends PromptAssistantProviderAdapter {
             if (message is Map<String, dynamic>) {
               final usageRaw = message['usage'];
               if (usageRaw is Map<String, dynamic>) {
+                final input = (usageRaw['input_tokens'] as num?)?.toInt() ?? 0;
+                final cacheRead =
+                    (usageRaw['cache_read_input_tokens'] as num?)?.toInt() ?? 0;
+                final cacheWrite =
+                    (usageRaw['cache_creation_input_tokens'] as num?)
+                        ?.toInt() ??
+                    0;
                 usage = Usage(
-                  input: (usageRaw['input_tokens'] as num?)?.toInt() ?? 0,
+                  input: input,
+                  cacheRead: cacheRead,
+                  cacheWrite: cacheWrite,
+                  totalTokens: input + cacheRead + cacheWrite,
                 );
               }
             }
@@ -171,10 +181,21 @@ class AnthropicMessagesAdapter extends PromptAssistantProviderAdapter {
             final usageRaw = json['usage'];
             if (usageRaw is Map<String, dynamic>) {
               final output = (usageRaw['output_tokens'] as num?)?.toInt() ?? 0;
+              final current = usage ?? Usage.empty;
+              final input =
+                  (usageRaw['input_tokens'] as num?)?.toInt() ?? current.input;
+              final cacheRead =
+                  (usageRaw['cache_read_input_tokens'] as num?)?.toInt() ??
+                  current.cacheRead;
+              final cacheWrite =
+                  (usageRaw['cache_creation_input_tokens'] as num?)?.toInt() ??
+                  current.cacheWrite;
               usage = Usage(
-                input: usage?.input ?? 0,
+                input: input,
                 output: output,
-                totalTokens: (usage?.input ?? 0) + output,
+                cacheRead: cacheRead,
+                cacheWrite: cacheWrite,
+                totalTokens: input + output + cacheRead + cacheWrite,
               );
             }
           case 'message_stop':
@@ -336,7 +357,7 @@ class AnthropicMessagesAdapter extends PromptAssistantProviderAdapter {
       }
     }
 
-    return {
+    final payload = <String, dynamic>{
       'model': request.model,
       ...anthropicReasoningPayload(
         reasoning: request.reasoningRequest,
@@ -345,7 +366,13 @@ class AnthropicMessagesAdapter extends PromptAssistantProviderAdapter {
         modelMaxOutputTokens: request.modelMaxOutputTokens,
       ),
       if (request.systemPrompt.trim().isNotEmpty)
-        'system': request.systemPrompt.trim(),
+        'system': [
+          {
+            'type': 'text',
+            'text': request.systemPrompt.trim(),
+            'cache_control': const {'type': 'ephemeral'},
+          },
+        ],
       'messages': turns,
       if (request.tools.isNotEmpty)
         'tools': [
@@ -358,6 +385,44 @@ class AnthropicMessagesAdapter extends PromptAssistantProviderAdapter {
         ],
       'stream': true,
     };
+    _addCacheControlToLastTool(payload);
+    _addCacheControlToLastMessage(payload);
+    return payload;
+  }
+
+  /// 断点顺序必须为 tools → system → messages；最多 3 个，留出余量。
+  void _addCacheControlToLastTool(Map<String, dynamic> payload) {
+    final tools = payload['tools'];
+    if (tools is! List || tools.isEmpty) return;
+    final last = tools.last;
+    if (last is Map<String, dynamic>) {
+      last['cache_control'] = const {'type': 'ephemeral'};
+    }
+  }
+
+  void _addCacheControlToLastMessage(Map<String, dynamic> payload) {
+    final messages = payload['messages'];
+    if (messages is! List || messages.isEmpty) return;
+    final last = messages.last;
+    if (last is! Map<String, dynamic> || last['role'] != 'user') return;
+    final content = last['content'];
+    if (content is String) {
+      if (content.trim().isEmpty) return;
+      last['content'] = [
+        {
+          'type': 'text',
+          'text': content,
+          'cache_control': const {'type': 'ephemeral'},
+        },
+      ];
+      return;
+    }
+    if (content is List && content.isNotEmpty) {
+      final block = content.last;
+      if (block is Map<String, dynamic>) {
+        block['cache_control'] = const {'type': 'ephemeral'};
+      }
+    }
   }
 
   Map<String, dynamic> _headers(String? apiKey) {

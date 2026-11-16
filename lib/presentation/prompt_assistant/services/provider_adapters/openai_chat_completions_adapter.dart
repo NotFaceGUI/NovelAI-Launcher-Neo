@@ -149,13 +149,7 @@ class OpenAiChatCompletionsAdapter extends PromptAssistantProviderAdapter {
         }
         final usageRaw = json['usage'];
         if (usageRaw is Map<String, dynamic>) {
-          final input = (usageRaw['prompt_tokens'] as num?)?.toInt() ?? 0;
-          final output = (usageRaw['completion_tokens'] as num?)?.toInt() ?? 0;
-          usage = Usage(
-            input: input,
-            output: output,
-            totalTokens: (usageRaw['total_tokens'] as num?)?.toInt() ?? 0,
-          );
+          usage = _parseOpenAiUsage(usageRaw);
         }
         final choices = json['choices'];
         if (choices is List && choices.isNotEmpty) {
@@ -336,14 +330,9 @@ class OpenAiChatCompletionsAdapter extends PromptAssistantProviderAdapter {
               yield AgentWireTextDelta(text);
             }
             final usageRaw = raw['usage'];
-            Usage? usage;
-            if (usageRaw is Map<String, dynamic>) {
-              usage = Usage(
-                input: (usageRaw['prompt_tokens'] as num?)?.toInt() ?? 0,
-                output: (usageRaw['completion_tokens'] as num?)?.toInt() ?? 0,
-                totalTokens: (usageRaw['total_tokens'] as num?)?.toInt() ?? 0,
-              );
-            }
+            final usage = usageRaw is Map<String, dynamic>
+                ? _parseOpenAiUsage(usageRaw)
+                : null;
             yield AgentWireFinish(
               stopReason: stopReasonFromName(first['finish_reason'] as String?),
               usage: usage,
@@ -758,6 +747,28 @@ class OpenAiChatCompletionsAdapter extends PromptAssistantProviderAdapter {
     }
     return contentToText(raw);
   }
+}
+
+Usage _parseOpenAiUsage(Map<String, dynamic> usageRaw) {
+  final input = (usageRaw['prompt_tokens'] as num?)?.toInt() ?? 0;
+  final output = (usageRaw['completion_tokens'] as num?)?.toInt() ?? 0;
+  final details = usageRaw['prompt_tokens_details'];
+  final cached = details is Map<String, dynamic>
+      ? (details['cached_tokens'] as num?)?.toInt()
+      : null;
+  final cacheWrite = details is Map<String, dynamic>
+      ? (details['cache_write_tokens'] as num?)?.toInt()
+      : null;
+  final deepseekCacheRead = (usageRaw['prompt_cache_hit_tokens'] as num?)
+      ?.toInt();
+  return Usage(
+    input: input,
+    output: output,
+    cacheRead: cached ?? deepseekCacheRead ?? 0,
+    cacheWrite: cacheWrite ?? 0,
+    totalTokens:
+        (usageRaw['total_tokens'] as num?)?.toInt() ?? (input + output),
+  );
 }
 
 class _OpenAiToolBuffer {

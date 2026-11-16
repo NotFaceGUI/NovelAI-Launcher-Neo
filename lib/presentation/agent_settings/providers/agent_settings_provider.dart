@@ -13,6 +13,7 @@ import '../../../core/network/web_access/web_access_models.dart';
 import '../../../core/storage/local_storage_service.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../data/models/agent/agent_settings.dart';
+import '../../../data/models/agent/agent_tool_pack.dart';
 import '../../../data/repositories/gallery_folder_repository.dart';
 import '../../agent_chat/services/agent_system_prompt.dart';
 import '../../providers/image_save_settings_provider.dart';
@@ -299,6 +300,28 @@ class AgentSettingsNotifier extends StateNotifier<AgentSettingsState> {
     });
   }
 
+  Future<void> setToolPackEnabled(AgentToolPack pack, bool enabled) {
+    if (!pack.isUserConfigurable) {
+      return Future.error(
+        ArgumentError.value(pack, 'pack', 'Tool pack is not configurable.'),
+      );
+    }
+    return _update((current) {
+      final overrides = Map<String, bool>.from(current.chat.toolPackOverrides);
+      if (enabled == pack.defaultEnabled) {
+        overrides.remove(pack.name);
+      } else {
+        overrides[pack.name] = enabled;
+      }
+      if (overrides.length > AgentSettings.maxToolPackOverrides) {
+        throw const FormatException('Too many tool pack overrides.');
+      }
+      return current.copyWith(
+        chat: current.chat.copyWith(toolPackOverrides: overrides),
+      );
+    });
+  }
+
   String buildDefaultSystemPrompt() => buildAgentSystemPromptBody(
     webAccessEnabled: state.settings.chat.webAccessEnabled,
   );
@@ -316,9 +339,22 @@ class AgentSettingsNotifier extends StateNotifier<AgentSettingsState> {
                 '${_supportDirectory!.path}${Platform.pathSeparator}agent'
                 '${Platform.pathSeparator}workspace',
               ));
-    final skillBlock = formatSkillsForSystemPrompt(
-      state.skills.enabledSkillMap().values.toList(growable: false),
-    );
+    final skills = state.skills.enabledSkillMap().values.toList(growable: false)
+      ..sort((a, b) => a.name.compareTo(b.name));
+    final skillBlock = formatSkillsForSystemPrompt(skills);
+    final enabledToolPacks = <String>[
+      for (final pack in AgentToolPack.values)
+        if (pack != AgentToolPack.web &&
+            state.settings.chat.isToolPackEnabled(pack))
+          pack.name,
+      if (state.settings.chat.webAccessEnabled) AgentToolPack.web.name,
+    ];
+    final disabledToolPacks = <String>[
+      for (final pack in AgentToolPack.values)
+        if (pack.isUserConfigurable &&
+            !state.settings.chat.isToolPackEnabled(pack))
+          pack.name,
+    ];
     return buildAgentSystemPrompt(
       workspacePath: workspaceDirectory.path,
       webAccessEnabled: state.settings.chat.webAccessEnabled,
@@ -328,6 +364,8 @@ class AgentSettingsNotifier extends StateNotifier<AgentSettingsState> {
         modeOverride: mode,
       ),
       mode: mode,
+      enabledToolPacks: enabledToolPacks,
+      disabledToolPacks: disabledToolPacks,
     );
   }
 

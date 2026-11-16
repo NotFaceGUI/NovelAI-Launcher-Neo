@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/agent/agent.dart';
@@ -5,7 +7,10 @@ import '../../../core/agent/harness/env/dart_io_execution_env.dart';
 import '../../../core/agent/harness/harness_types.dart';
 import '../../../core/agent/harness/skills.dart';
 import '../../../core/agent/permissions/permissions.dart';
+import '../../../core/utils/app_logger.dart';
+import '../../../data/models/agent/agent_tool_pack.dart';
 import '../../agent_settings/providers/agent_settings_provider.dart';
+import 'agent_tool_packs.dart';
 import '../../prompt_assistant/models/prompt_assistant_models.dart';
 import '../../prompt_assistant/providers/web_access_provider.dart';
 import '../../providers/generation/image_workflow_controller.dart';
@@ -101,11 +106,8 @@ class AgentToolRegistryBuilder {
     required bool fullAccess,
     required AgentPermissionMode permissionMode,
   }) {
-    final webAccessEnabled = _ref
-        .read(agentSettingsProvider)
-        .settings
-        .chat
-        .webAccessEnabled;
+    final chatConfig = _ref.read(agentSettingsProvider).settings.chat;
+    final webAccessEnabled = chatConfig.webAccessEnabled;
     _manualInpaintToolbox.configureFileAccess(
       workspaceDir: _workspaceDir,
       allowOutsideWorkspace: fullAccess,
@@ -186,58 +188,92 @@ class AgentToolRegistryBuilder {
           .read(kritaBridgeNotifierProvider.notifier)
           .sendImageToKrita(bytes, name: name),
     );
-    final tools = <AgentTool>[
-      ...UserQuestionToolbox(_questionController).tools(),
-      ...PromptToolbox(
-        _ref,
-        skills: _skills,
-        skillDiagnostics: _skillDiagnostics,
-        reloadSkills: _reloadSkills,
-      ).tools(),
-      ...ExecutionToolbox(
-        _workspaceDir,
-        allowOutsideWorkspace: fullAccess,
-        observationLedger: _observationLedger,
-        activeSessionId: _activeSessionId,
-      ).tools(),
-      ...GenerationToolbox(
-        _ref,
-        workspaceDir: _workspaceDir,
-        allowOutsideWorkspace: fullAccess,
-        runtime: _generationRuntime,
-        resourceResolver: resourceResolver,
-        readAttachedImage: (index) =>
-            readAgentAttachedImage(_messages(), index),
-      ).tools(),
-      ...QueueToolbox(_ref, _queueRuntime).tools(),
-      ..._manualInpaintToolbox.tools(),
-      ...TagToolbox(_ref).tools(),
-      ...ApplicationContextToolbox(
-        _ref,
-        loadDrafts: _manualInpaintToolbox.listDraftSummaries,
-      ).tools(),
-      ...TagLibraryToolbox(_ref, resourceResolver: resourceResolver).tools(),
-      ...FixedTagsToolbox(_ref).tools(),
-      ...GalleryToolbox(_ref).tools(),
-      ...ReferenceLibraryToolbox(_ref, resourceResolver).tools(),
-      ...ImagePresentationToolbox(resourceResolver).tools(),
-      ...GenerationResourceToolbox(_ref).tools(),
-      ...GenerationImageWorkflowToolbox(workflowService).tools(),
-      ...GenerationImageFavoriteToolbox(_ref).tools(),
-      ...ImageResourceActionToolbox(imageActionService).tools(),
-      ...StoryboardToolbox(_ref).tools(),
-      if (webAccessEnabled)
-        ...WebAccessToolbox(
-          config: _ref
-              .read(webAccessConfigProvider)
-              .config
-              .copyWith(enabled: true),
-          loadGateway: () => _ref.read(webAccessGatewayProvider),
+    final toolGroups = <AgentToolPack, List<AgentTool>>{
+      AgentToolPack.core: [
+        ...UserQuestionToolbox(_questionController).tools(),
+        ...PromptToolbox(
+          _ref,
+          skills: _skills,
+          skillDiagnostics: _skillDiagnostics,
+          reloadSkills: _reloadSkills,
         ).tools(),
+        ...ExecutionToolbox(
+          _workspaceDir,
+          allowOutsideWorkspace: fullAccess,
+          observationLedger: _observationLedger,
+          activeSessionId: _activeSessionId,
+        ).tools(),
+        ...ApplicationContextToolbox(
+          _ref,
+          loadDrafts: _manualInpaintToolbox.listDraftSummaries,
+        ).tools(),
+        ...TagToolbox(_ref).tools(),
+        ...ImagePresentationToolbox(resourceResolver).tools(),
+      ],
+      AgentToolPack.generation: [
+        ...GenerationToolbox(
+          _ref,
+          workspaceDir: _workspaceDir,
+          allowOutsideWorkspace: fullAccess,
+          runtime: _generationRuntime,
+          resourceResolver: resourceResolver,
+          readAttachedImage: (index) =>
+              readAgentAttachedImage(_messages(), index),
+        ).tools(),
+        ...GenerationResourceToolbox(_ref).tools(),
+      ],
+      AgentToolPack.generationActions: [
+        ...GenerationImageWorkflowToolbox(workflowService).tools(),
+        ...GenerationImageFavoriteToolbox(_ref).tools(),
+        ...ImageResourceActionToolbox(imageActionService).tools(),
+      ],
+      AgentToolPack.queue: [...QueueToolbox(_ref, _queueRuntime).tools()],
+      AgentToolPack.inpaint: [..._manualInpaintToolbox.tools()],
+      AgentToolPack.tagLibrary: [
+        ...TagLibraryToolbox(_ref, resourceResolver: resourceResolver).tools(),
+        ...FixedTagsToolbox(_ref).tools(),
+      ],
+      AgentToolPack.gallery: [...GalleryToolbox(_ref).tools()],
+      AgentToolPack.references: [
+        ...ReferenceLibraryToolbox(_ref, resourceResolver).tools(),
+      ],
+      AgentToolPack.storyboard: [...StoryboardToolbox(_ref).tools()],
+      if (webAccessEnabled)
+        AgentToolPack.web: [
+          ...WebAccessToolbox(
+            config: _ref
+                .read(webAccessConfigProvider)
+                .config
+                .copyWith(enabled: true),
+            loadGateway: () => _ref.read(webAccessGatewayProvider),
+          ).tools(),
+        ],
+    };
+    final allTools = [
+      for (final pack in AgentToolPack.values) ...?toolGroups[pack],
     ];
+    final tools = filterToolsForPacks(
+      toolGroups,
+      chatConfig,
+      webAccessEnabled: webAccessEnabled,
+    );
+    var allSchemaChars = 0;
+    for (final tool in allTools) {
+      allSchemaChars +=
+          tool.name.length +
+          tool.description.length +
+          jsonEncode(tool.parameters).length;
+    }
+    AppLogger.d(
+      'agent registry all=${allTools.length} enabled=${tools.length} '
+          'allSchemaChars=$allSchemaChars',
+      'AgentChat',
+    );
     final catalog = AgentToolPermissionCatalog(
-      toolNames: tools.map((tool) => tool.name),
-      descriptors: tools.map((tool) => describeAgentToolPermission(tool.name)),
+      toolNames: allTools.map((tool) => tool.name),
+      descriptors: allTools.map(
+        (tool) => describeAgentToolPermission(tool.name),
+      ),
     );
     final policy = agentPermissionPolicy(
       safeMode: permissionMode == AgentPermissionMode.safe,

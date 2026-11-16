@@ -433,6 +433,118 @@ void main() {
     expect(usage.totalTokens, 30);
   });
 
+  test('Anthropic merges cache read and creation usage', () async {
+    final dio = Dio()
+      ..httpClientAdapter = _SseAdapter(
+        'event: message_start\n'
+        'data: {"type":"message_start","message":{"usage":{'
+        '"input_tokens":80,"cache_creation_input_tokens":20,'
+        '"cache_read_input_tokens":40}}}\n\n'
+        'event: content_block_start\n'
+        'data: {"type":"content_block_start","index":0,'
+        '"content_block":{"type":"text","text":""}}\n\n'
+        'event: content_block_delta\n'
+        'data: {"type":"content_block_delta","index":0,'
+        '"delta":{"type":"text_delta","text":"done"}}\n\n'
+        'event: message_delta\n'
+        'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},'
+        '"usage":{"output_tokens":10}}\n\n'
+        'event: message_stop\n'
+        'data: {"type":"message_stop"}\n\n',
+      );
+    addTearDown(dio.close);
+
+    final events = await const AnthropicMessagesAdapter()
+        .completeAgent(
+          dio: dio,
+          request: _request(ProviderProtocol.anthropicMessages),
+          cancelToken: CancelToken(),
+        )
+        .toList();
+    final usage = events.whereType<AgentWireFinish>().single.usage!;
+
+    expect(usage.input, 80);
+    expect(usage.cacheRead, 40);
+    expect(usage.cacheWrite, 20);
+    expect(usage.output, 10);
+    expect(usage.totalTokens, 150);
+  });
+
+  test('OpenAI chat reports cached prompt tokens', () async {
+    final dio = Dio()
+      ..httpClientAdapter = _SseAdapter(
+        'data: {"choices":[{"delta":{"content":"done"},'
+        '"finish_reason":"stop"}],"usage":{"prompt_tokens":100,'
+        '"completion_tokens":10,"total_tokens":110,'
+        '"prompt_tokens_details":{"cached_tokens":60}}}\n\n'
+        'data: [DONE]\n\n',
+      );
+    addTearDown(dio.close);
+
+    final events = await const OpenAiChatCompletionsAdapter()
+        .completeAgent(
+          dio: dio,
+          request: _request(ProviderProtocol.openaiChatCompletions),
+          cancelToken: CancelToken(),
+        )
+        .toList();
+    final usage = events.whereType<AgentWireFinish>().single.usage!;
+
+    expect(usage.input, 100);
+    expect(usage.cacheRead, 60);
+    expect(usage.output, 10);
+    expect(usage.totalTokens, 110);
+  });
+
+  test('OpenAI chat reports DeepSeek cache hit tokens', () async {
+    final dio = Dio()
+      ..httpClientAdapter = _SseAdapter(
+        'data: {"choices":[{"delta":{"content":"done"},'
+        '"finish_reason":"stop"}],"usage":{"prompt_tokens":100,'
+        '"completion_tokens":10,"total_tokens":110,'
+        '"prompt_cache_hit_tokens":80,"prompt_cache_miss_tokens":20}}\n\n'
+        'data: [DONE]\n\n',
+      );
+    addTearDown(dio.close);
+
+    final events = await const OpenAiChatCompletionsAdapter()
+        .completeAgent(
+          dio: dio,
+          request: _request(ProviderProtocol.openaiChatCompletions),
+          cancelToken: CancelToken(),
+        )
+        .toList();
+    final usage = events.whereType<AgentWireFinish>().single.usage!;
+
+    expect(usage.cacheRead, 80);
+    expect(usage.input, 100);
+  });
+
+  test('OpenAI Responses reports cached input tokens', () async {
+    final dio = Dio()
+      ..httpClientAdapter = _SseAdapter(
+        'event: response.completed\n'
+        'data: {"type":"response.completed","response":{"usage":{'
+        '"input_tokens":100,"output_tokens":10,"total_tokens":110,'
+        '"input_tokens_details":{"cached_tokens":40}}}}\n\n',
+      );
+    addTearDown(dio.close);
+
+    final events = await const OpenAiResponsesAdapter()
+        .completeAgent(
+          dio: dio,
+          request: _request(ProviderProtocol.openaiResponses),
+          cancelToken: CancelToken(),
+        )
+        .toList();
+    final usage = events.whereType<AgentWireFinish>().single.usage!;
+
+    expect(usage.input, 100);
+    expect(usage.cacheRead, 40);
+    expect(usage.output, 10);
+    expect(usage.totalTokens, 110);
+  });
+
   test('Gemini sends full JSON Schema for numeric tool enums', () async {
     final capture = _CaptureAdapter();
     final dio = Dio(BaseOptions(receiveTimeout: const Duration(minutes: 2)))
@@ -985,7 +1097,8 @@ void main() {
         ProviderProtocol.ollamaChatCompletions =>
           ((payload['messages'] as List).first as Map)['content'],
         ProviderProtocol.openaiResponses => payload['instructions'],
-        ProviderProtocol.anthropicMessages => payload['system'],
+        ProviderProtocol.anthropicMessages =>
+          (((payload['system'] as List).single as Map)['text']),
         ProviderProtocol.geminiGenerateContent =>
           ((((payload['systemInstruction'] as Map)['parts'] as List).single
               as Map)['text']),

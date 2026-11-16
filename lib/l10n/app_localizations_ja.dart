@@ -13741,6 +13741,72 @@ class AppLocalizationsJa extends AppLocalizations {
       '有効にすると公開ページを検索・閲覧できます。無効にすると実行時ツールから Web 機能が削除されます。';
 
   @override
+  String get agentSettings_toolPacks => 'ツールセット';
+
+  @override
+  String get agentSettings_toolPacksDescription =>
+      'この会話に必要なツール定義だけを送信します。ツールが少ないほど、毎ターンの入力トークンを抑えられます。';
+
+  @override
+  String get agentSettings_toolPacksCoreNote =>
+      'プロンプト編集、read、画像確認、Skills、ユーザーへの質問は常に利用できます。';
+
+  @override
+  String get agentSettings_toolPackGeneration => '生成';
+
+  @override
+  String get agentSettings_toolPackGenerationDescription =>
+      '生成の準備/送信、画像の逆推測、生成設定の読み取り、Image2Image 元画像の管理。';
+
+  @override
+  String get agentSettings_toolPackGenerationActions => '生成画像の操作';
+
+  @override
+  String get agentSettings_toolPackGenerationActionsDescription =>
+      '保存、お気に入り、選択、コピー、Krita への送信、画像ワークフローの起動。';
+
+  @override
+  String get agentSettings_toolPackQueue => '生成キュー';
+
+  @override
+  String get agentSettings_toolPackQueueDescription => 'キュー内の生成タスクを確認・操作します。';
+
+  @override
+  String get agentSettings_toolPackInpaint => 'インペイント';
+
+  @override
+  String get agentSettings_toolPackInpaintDescription =>
+      '手描きインペイントの下書き作成/送信、マスク作成、キャンバス拡張。';
+
+  @override
+  String get agentSettings_toolPackGallery => 'ギャラリー';
+
+  @override
+  String get agentSettings_toolPackGalleryDescription =>
+      'ローカルおよびオンラインギャラリーの検索と閲覧。';
+
+  @override
+  String get agentSettings_toolPackTagLibrary => 'タグライブラリ';
+
+  @override
+  String get agentSettings_toolPackTagLibraryDescription =>
+      '再利用できるタグライブラリの項目とカテゴリを閲覧・作成・編集します。固定タグも含みます。';
+
+  @override
+  String get agentSettings_toolPackReferences => 'Vibe・Precise Reference';
+
+  @override
+  String get agentSettings_toolPackReferencesDescription =>
+      'Vibe と Precise Reference の項目と有効状態を管理します。';
+
+  @override
+  String get agentSettings_toolPackStoryboard => 'ストーリーボード';
+
+  @override
+  String get agentSettings_toolPackStoryboardDescription =>
+      'ストーリーボードのページとパネルを作成・編集します。';
+
+  @override
   String get agentSettings_systemPrompt => 'システムプロンプト';
 
   @override
