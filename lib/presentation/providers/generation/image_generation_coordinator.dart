@@ -107,10 +107,15 @@ class ImageGenerationCoordinator {
         }
         if (_aborted(handle)) break;
 
+        final fixedSeed =
+            (command.totalImages == 1 || command.preserveBatchSeed) &&
+            currentParams.seed != -1;
         final batchSeed = command.materializeRandomSeed
-            ? command.totalImages == 1 && currentParams.seed != -1
+            ? fixedSeed
                   ? currentParams.seed
                   : _random.nextInt(randomSeedExclusiveUpperBound)
+            : command.preserveBatchSeed && currentParams.seed != -1
+            ? currentParams.seed
             : currentParams.seed == -1
             ? -1
             : currentParams.seed + batch;

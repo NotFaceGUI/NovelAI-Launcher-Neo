@@ -4,6 +4,7 @@ import '../../../core/services/anlas_calculator.dart';
 import '../../../data/models/image/image_params.dart';
 import '../../providers/image_generation_provider.dart';
 import '../../providers/subscription_provider.dart';
+import 'generation_prompt_variations.dart';
 
 class GenerationAnlasEstimator {
   GenerationAnlasEstimator(this._ref);
@@ -43,5 +44,23 @@ class GenerationAnlasEstimator {
       ),
       oneTimeCost: AnlasCalculator.resolveVibeEncodingCost(params),
     );
+  }
+
+  /// Multi-prompt runs may mix canvas sizes, steps and samplers, so the cost
+  /// of each entry is calculated independently and summed.
+  int estimateVariations(
+    ImageParams base,
+    List<PromptVariation> variations,
+  ) {
+    var total = 0;
+    for (final variation in variations) {
+      final params = variation.applyOverrides(
+        base.copyWith(prompt: variation.prompt, nSamples: 1),
+      );
+      final cost = estimate(params, requestCount: 1, batchSize: 1);
+      if (cost == AnlasCalculator.invalidCost) return cost;
+      total += cost;
+    }
+    return total;
   }
 }

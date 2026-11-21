@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/agent/agent_types.dart';
 import '../../../core/agent/resources/agent_chat_resource_reference.dart';
+import '../../../core/constants/api_constants.dart';
 import '../../../core/constants/model_capabilities.dart';
 import '../../../core/services/anlas_calculator.dart';
 import '../../../core/services/character_conversion_service.dart';
@@ -118,10 +119,14 @@ class GenerationPreparationService {
     ImageParams? baseOverride,
     ImageParams? characterSnapshotOverride,
   }) async {
-    final promptVariations = _parsePromptVariations(kind, args);
+    final ImageParams base =
+        baseOverride ?? _ref.read(generationParamsNotifierProvider);
+    final promptVariations = _parsePromptVariations(kind, args, base.model);
     if (promptVariations.error != null) return promptVariations.error!;
     final prompts = promptVariations.prompts;
-    final prompt = (args['prompt'] as String?)?.trim() ?? '';
+    final firstVariation = prompts?.first;
+    final prompt =
+        (args['prompt'] as String?)?.trim() ?? firstVariation?.prompt ?? '';
     if (prompts == null && prompt.isEmpty) {
       return agentToolError(
         'invalid_prompt',
@@ -147,10 +152,42 @@ class GenerationPreparationService {
       );
     }
 
-    final ImageParams base =
-        baseOverride ?? _ref.read(generationParamsNotifierProvider);
+    final requestedSteps = args['steps'];
+    if (requestedSteps != null &&
+        (requestedSteps is! int ||
+            requestedSteps < 1 ||
+            requestedSteps > 50)) {
+      return agentToolError(
+        'invalid_steps',
+        'Parameter "steps" must be between 1 and 50.',
+      );
+    }
+    final requestedSampler = args['sampler'];
+    if (requestedSampler != null &&
+        (requestedSampler is! String ||
+            !Samplers.allSamplers.contains(requestedSampler))) {
+      return agentToolError(
+        'invalid_sampler',
+        'Parameter "sampler" is not a supported NovelAI sampler.',
+      );
+    }
+    final requestedScale = args['scale'];
+    if (requestedScale != null &&
+        (requestedScale is! num ||
+            requestedScale < 0 ||
+            requestedScale > 10)) {
+      return agentToolError(
+        'invalid_scale',
+        'Parameter "scale" must be between 0 and 10.',
+      );
+    }
+    // Per-entry overrides apply to that image only; the shared run values
+    // remain what the caller/page configured.
     final width = (args['width'] as num?)?.toInt() ?? base.width;
     final height = (args['height'] as num?)?.toInt() ?? base.height;
+    final steps = (requestedSteps as int?) ?? base.steps;
+    final sampler = (requestedSampler as String?) ?? base.sampler;
+    final scale = (requestedScale as num?)?.toDouble() ?? base.scale;
     final resolutionIssue = NaiResolutionAdapter.validateGenerationResolution(
       width,
       height,
@@ -163,8 +200,27 @@ class GenerationPreparationService {
             '${NaiResolutionAdapter.officialMaxPixels}.',
       );
     }
+    if (prompts != null) {
+      for (var index = 0; index < prompts.length; index++) {
+        final entryWidth = prompts[index].width ?? width;
+        final entryHeight = prompts[index].height ?? height;
+        if (NaiResolutionAdapter.validateGenerationResolution(
+              entryWidth,
+              entryHeight,
+            ) !=
+            null) {
+          return agentToolError(
+            'invalid_resolution',
+            'Invalid generation resolution ${entryWidth}x$entryHeight for '
+                '"prompts[$index]". Width and height must be multiples of 64 '
+                'and total pixels must not exceed '
+                '${NaiResolutionAdapter.officialMaxPixels}.',
+          );
+        }
+      }
+    }
 
-    final promptParts = <String>[prompts?.first ?? prompt];
+    final promptParts = <String>[firstVariation?.prompt ?? prompt];
     final negativePromptParts = <String>[
       (args['negative_prompt'] as String?)?.trim() ?? base.negativePrompt,
     ];
@@ -372,7 +428,14 @@ class GenerationPreparationService {
           .join(', '),
       width: width,
       height: height,
-      seed: (args['seed'] as num?)?.toInt() ?? -1,
+      steps: steps,
+      sampler: sampler,
+      scale: scale,
+      // Multi-prompt entries randomize independently unless the entry pins a
+      // seed; a shared page seed is not copied to every card.
+      seed: prompts != null
+          ? (firstVariation?.seed ?? -1)
+          : (args['seed'] as num?)?.toInt() ?? -1,
       nSamples: kind == GenerationPreparationKind.generate
           ? (prompts?.length ?? count)
           : 1,
@@ -390,11 +453,13 @@ class GenerationPreparationService {
     // 多提示词模式每条提示词只出一张图：批次大小固定为 1，总图数等于条目数，
     // 不随“每次请求图片数”设置翻倍。
     final batchSize = prompts != null ? 1 : _anlasEstimator.currentBatchSize;
-    final estimate = _anlasEstimator.estimate(
-      params,
-      requestCount: kind == GenerationPreparationKind.queue ? count : 1,
-      batchSize: batchSize,
-    );
+    final estimate = prompts != null
+        ? _anlasEstimator.estimateVariations(params, prompts)
+        : _anlasEstimator.estimate(
+            params,
+            requestCount: kind == GenerationPreparationKind.queue ? count : 1,
+            batchSize: batchSize,
+          );
     if (estimate == AnlasCalculator.invalidCost) {
       return agentToolError(
         'invalid_cost',
@@ -424,9 +489,11 @@ class GenerationPreparationService {
 
   /// 多提示词模式的准备期校验：`prompts` 与 `prompt` / `count` 互斥，
   /// 且只对 generate 生效。
-  ({List<String>? prompts, AgentToolResult? error}) _parsePromptVariations(
+  ({List<PromptVariation>? prompts, AgentToolResult? error})
+  _parsePromptVariations(
     GenerationPreparationKind kind,
     Map<String, dynamic> args,
+    String model,
   ) {
     if (args['prompts'] == null) return (prompts: null, error: null);
     if ((args['prompt'] as String?)?.trim().isNotEmpty ?? false) {
@@ -461,6 +528,7 @@ class GenerationPreparationService {
     final parsed = parsePromptVariations(
       args['prompts'],
       maximum: _maxGenerateCount,
+      model: model,
     );
     if (parsed.error != null) {
       return (

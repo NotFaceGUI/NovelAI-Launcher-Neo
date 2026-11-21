@@ -19,6 +19,7 @@ class GenerationCommand {
     this.minimumContextMegaPixels = 88.0,
     this.focusedSelectionRect,
     this.materializeRandomSeed = true,
+    this.preserveBatchSeed = false,
     this.requestEachImage = false,
     this.cancellableFallback = true,
     this.streamPreviewEnabled = true,
@@ -34,6 +35,10 @@ class GenerationCommand {
   final double minimumContextMegaPixels;
   final Rect? focusedSelectionRect;
   final bool materializeRandomSeed;
+
+  /// Honors a non-random seed supplied per batch (multi-prompt entries) even
+  /// when the run contains more than one image.
+  final bool preserveBatchSeed;
   final bool requestEachImage;
   final bool cancellableFallback;
   final bool streamPreviewEnabled;

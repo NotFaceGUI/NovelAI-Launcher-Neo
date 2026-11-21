@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nai_launcher/core/utils/prompt_preset_resolution.dart';
 import 'package:nai_launcher/data/models/image/image_params.dart';
+import 'package:nai_launcher/data/models/image/prompt_variation.dart';
 import 'package:nai_launcher/data/models/fixed_tag/fixed_tag_usage_snapshot.dart';
 import 'package:nai_launcher/presentation/providers/generation/generation_request_preparation_service.dart';
 
@@ -173,7 +174,7 @@ void main() {
       );
       final variation = await service.preparePromptVariation(
         current,
-        '<alice>, sitting',
+        const PromptVariation(prompt: '<alice>, sitting'),
       );
 
       expect(resolvedAliases, ['<alice>, sitting']);

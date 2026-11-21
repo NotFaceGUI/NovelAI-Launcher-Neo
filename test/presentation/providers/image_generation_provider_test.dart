@@ -20,6 +20,7 @@ import 'package:nai_launcher/data/models/gallery/nai_image_metadata.dart';
 import 'package:nai_launcher/data/services/metadata/unified_metadata_parser.dart';
 import 'package:nai_launcher/data/models/image/image_params.dart';
 import 'package:nai_launcher/data/models/image/image_stream_chunk.dart';
+import 'package:nai_launcher/data/models/image/prompt_variation.dart';
 import 'package:nai_launcher/data/models/user/user_subscription.dart';
 import 'package:nai_launcher/data/models/vibe/vibe_reference.dart';
 import 'package:nai_launcher/presentation/providers/auth_provider.dart';
@@ -1864,6 +1865,9 @@ void main() {
           '1girl, sitting',
           '1girl, jumping',
         ];
+        final promptVariations = [
+          for (final prompt in variations) PromptVariation(prompt: prompt),
+        ];
         await container
             .read(imageGenerationNotifierProvider.notifier)
             .generate(
@@ -1874,7 +1878,7 @@ void main() {
                     nSamples: variations.length,
                   ),
               batchSizeOverride: 1,
-              promptVariations: variations,
+              promptVariations: promptVariations,
             );
 
         final state = container.read(imageGenerationNotifierProvider);

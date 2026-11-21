@@ -78,12 +78,23 @@ class GenerationToolDefinitions {
             'Prepare an image generation transaction without submitting it. '
             'Returns a persistent preparation_id and the exact estimated '
             'Anlas cost. operation is generate (synchronous) or queue. '
-            'Submit exact zero-cost preparations directly. Paid submissions '
-            'use confirmed=true and the application permission approval UI.',
+            'Provide exactly one of "prompt" (one image per count) or '
+            '"prompts" (multi-prompt entries, each optionally carrying its own '
+            'canvas and sampling). Submit exact zero-cost preparations '
+            'directly. Paid submissions use confirmed=true and the application '
+            'permission approval UI.',
         parameters: {
           'type': 'object',
           'properties': generationPreparationProperties(includeOperation: true),
-          'required': const ['operation', 'prompt'],
+          'required': const ['operation'],
+          'anyOf': const [
+            {
+              'required': ['prompt'],
+            },
+            {
+              'required': ['prompts'],
+            },
+          ],
         },
         executeFn: (_, args) => _preparation.prepare(args),
       ),
@@ -208,7 +219,7 @@ class GenerationToolDefinitions {
             'resource_ref; never derive one from the other. Thumbnails appear '
             'in the chat. For normal "draw/generate" requests '
             'always use this tool instead of queue_image_task.',
-        parameters: const {
+        parameters: {
           'type': 'object',
           'properties': {
             'prompt': {
@@ -219,17 +230,20 @@ class GenerationToolDefinitions {
             },
             'prompts': {
               'type': 'array',
-              'items': {'type': 'string'},
+              'items': promptVariationItemSchema(),
               'maxItems': generationToolMaxGenerateCount,
               'description':
-                  'Multi-prompt mode: one COMPLETE positive prompt per '
-                  'image, in generation order, each entry producing exactly '
-                  'one image (batch size 1). Use it when the user wants '
-                  'different poses, expressions or subjects in one canvas '
-                  'instead of N identical variations. Maximum '
+                  'Multi-prompt mode: one entry per image, in generation '
+                  'order, each producing exactly one image (batch size 1). '
+                  'Use it when the user wants different poses, expressions, '
+                  'subjects or canvases instead of N identical variations. A '
+                  'string entry uses the shared parameters; an object entry '
+                  'may also set width, height, steps, sampler, scale, seed and '
+                  'its own characters for that image only. Maximum '
                   '$generationToolMaxGenerateCount entries. Cannot be combined '
-                  'with prompt or count; negative_prompt, width, height, '
-                  'seed, source_image and characters apply to every entry.',
+                  'with prompt or count; negative_prompt and source_image '
+                  'apply to every entry, while characters are shared only for '
+                  'entries that omit their own list.',
             },
             'negative_prompt': {
               'type': 'string',
@@ -253,6 +267,29 @@ class GenerationToolDefinitions {
                   'Height in px; must be a multiple of 64. Prefer preset '
                   'values (768/640/512/1216/1024/832/1536/1472/1920/1088).',
             },
+            'steps': {
+              'type': 'integer',
+              'minimum': 1,
+              'maximum': 50,
+              'description':
+                  'Sampling steps shared by every image; prompts entries may '
+                  'override it. Omit to reuse the generation page setting.',
+            },
+            'sampler': {
+              'type': 'string',
+              'enum': Samplers.allSamplers,
+              'description':
+                  'Sampler shared by every image; prompts entries may '
+                  'override it. Omit to reuse the generation page setting.',
+            },
+            'scale': {
+              'type': 'number',
+              'minimum': 0,
+              'maximum': 10,
+              'description':
+                  'CFG scale shared by every image; prompts entries may '
+                  'override it. Omit to reuse the generation page setting.',
+            },
             'count': {
               'type': 'integer',
               'minimum': 1,
@@ -270,6 +307,8 @@ class GenerationToolDefinitions {
                   'Omit or -1 for random. A fixed seed only '
                   'applies when count = 1.',
             },
+            'character_layout_mode': characterLayoutModeSchema(),
+            'characters': characterEntriesSchema(),
             'source_image': {
               'type': 'string',
               'description':

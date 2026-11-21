@@ -5,6 +5,7 @@ import '../../../core/utils/prompt_preset_resolution.dart';
 import '../../../core/utils/prompt_edit_document.dart';
 import '../../../core/utils/prompt_effective_params.dart';
 import '../../../data/models/image/image_params.dart';
+import '../../../data/models/image/prompt_variation.dart';
 import '../../../data/models/fixed_tag/fixed_tag_usage_snapshot.dart';
 
 class GenerationPromptPreparation {
@@ -176,12 +177,12 @@ class GenerationRequestPreparationService {
   /// 负向提示词等其余字段沿用已经准备过的快照，不重复解析预设内容。
   Future<ImageParams> preparePromptVariation(
     ImageParams currentParams,
-    String prompt,
+    PromptVariation variation,
   ) async {
     final promptPreparation = dependencies.prompt;
     final resolvedPrompt = CharacterPromptBlockParser.parse(
       PromptEditDocument.effectiveText(
-        promptPreparation.resolveAliases(prompt),
+        promptPreparation.resolveAliases(variation.prompt),
       ),
     ).positivePrompt;
     final preparedPrompt = promptPreparation
@@ -193,7 +194,7 @@ class GenerationRequestPreparationService {
         )
         .prompt;
     return effectivePromptParams(
-      currentParams.copyWith(prompt: preparedPrompt),
+      variation.applyOverrides(currentParams.copyWith(prompt: preparedPrompt)),
     );
   }
 

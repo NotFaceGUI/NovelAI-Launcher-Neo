@@ -9,6 +9,7 @@ import 'package:nai_launcher/core/storage/replication_queue_storage.dart';
 import 'package:nai_launcher/data/models/character/character_prompt.dart';
 import 'package:nai_launcher/data/models/image/image_params.dart'
     show ImageParams;
+import 'package:nai_launcher/data/models/image/prompt_variation.dart';
 import 'package:nai_launcher/data/models/queue/failure_handling_strategy.dart';
 import 'package:nai_launcher/data/models/queue/replication_task.dart';
 import 'package:nai_launcher/data/models/queue/replication_task_generation_snapshot.dart';
@@ -663,7 +664,8 @@ class _ControlledImageGenerationNotifier extends ImageGenerationNotifier {
     int? batchSizeOverride,
     bool preserveCharacterSnapshot = false,
     GenerationFocusedSnapshot? focusedOverride,
-    List<String>? promptVariations,
+    List<PromptVariation>? promptVariations,
+    ImageParams? promptVariationBase,
   }) async {
     if (_activeInvocation != null) return;
     final invocation = _ControlledGenerationInvocation();
@@ -751,7 +753,8 @@ class _TestImageGenerationNotifier extends ImageGenerationNotifier {
     int? batchSizeOverride,
     bool preserveCharacterSnapshot = false,
     GenerationFocusedSnapshot? focusedOverride,
-    List<String>? promptVariations,
+    List<PromptVariation>? promptVariations,
+    ImageParams? promptVariationBase,
   }) async {}
 }
 
@@ -764,7 +767,8 @@ class _CapturingImageGenerationNotifier extends _TestImageGenerationNotifier {
     int? batchSizeOverride,
     bool preserveCharacterSnapshot = false,
     GenerationFocusedSnapshot? focusedOverride,
-    List<String>? promptVariations,
+    List<PromptVariation>? promptVariations,
+    ImageParams? promptVariationBase,
   }) async {
     generated = params;
   }

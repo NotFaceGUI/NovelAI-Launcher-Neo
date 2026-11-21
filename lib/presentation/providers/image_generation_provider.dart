@@ -29,6 +29,7 @@ import '../../data/models/fixed_tag/fixed_tag_usage_snapshot.dart';
 import '../../data/models/gallery/nai_image_metadata.dart';
 import '../../data/models/image/image_params.dart';
 import '../../data/models/image/image_stream_chunk.dart';
+import '../../data/models/image/prompt_variation.dart';
 import '../../data/repositories/gallery_folder_repository.dart';
 import '../../data/services/alias_resolver_service.dart';
 import '../../data/services/statistics_cache_service.dart';
@@ -279,7 +280,8 @@ class ImageGenerationNotifier extends _$ImageGenerationNotifier {
     int? batchSizeOverride,
     bool preserveCharacterSnapshot = false,
     GenerationFocusedSnapshot? focusedOverride,
-    List<String>? promptVariations,
+    List<PromptVariation>? promptVariations,
+    ImageParams? promptVariationBase,
   }) async {
     if (_isDisposed || state.isBusy) {
       return;
@@ -400,14 +402,21 @@ class ImageGenerationNotifier extends _$ImageGenerationNotifier {
                   batch < promptVariations.length
               ? promptVariations[batch]
               : null;
-          return variation == null
-              ? base
-              : await preparation.preparePromptVariation(base, variation);
+          if (variation == null) return base;
+          return preparation.preparePromptVariation(
+            promptVariationBase ?? base,
+            variation,
+          );
         },
         focusedInpaintEnabled: prepared.focusedSnapshot.enabled,
         minimumContextMegaPixels:
             prepared.focusedSnapshot.minimumContextMegaPixels,
         focusedSelectionRect: prepared.focusedSnapshot.selectionRect,
+        // Multi-prompt entries may pin a seed; count-mode batches keep the
+        // generation page rule that a fixed seed only applies to one image.
+        preserveBatchSeed:
+            promptVariations?.any((variation) => variation.hasExplicitSeed) ??
+            false,
         streamPreviewEnabled: ref.read(generationStreamPreviewSettingsProvider),
       );
       final handle = coordinator.start(command);

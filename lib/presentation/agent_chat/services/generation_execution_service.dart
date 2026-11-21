@@ -36,17 +36,21 @@ class GenerationExecutionService {
     AgentToolUpdateCallback? onUpdate,
   ]) async {
     final prepared = args['_prepared_generation'] as GenerationPreparation;
+    final base = prepared.params;
     // 多提示词模式：每条提示词一张图，一次调用即可产出不同姿势；总图数等于
     // 条目数，不随“每次请求图片数”设置翻倍。
     final variationArguments = parsePromptVariations(
       args['prompts'],
       maximum: _maxGenerateCount,
+      model: base.model,
     );
     if (variationArguments.error != null) {
       return generationErrorResult(variationArguments.error!);
     }
     final prompts = variationArguments.prompts;
-    final prompt = (args['prompt'] as String?)?.trim() ?? prompts?.first ?? '';
+    final firstVariation = prompts?.first;
+    final prompt =
+        (args['prompt'] as String?)?.trim() ?? firstVariation?.prompt ?? '';
     if (prompt.isEmpty) {
       return generationErrorResult('Parameter "prompt" is required.');
     }
@@ -59,10 +63,17 @@ class GenerationExecutionService {
       );
     }
     final count = prompts?.length ?? requestedCount;
-    final base = prepared.params;
     final requestedSeed = (args['seed'] as num?)?.toInt() ?? -1;
-    final width = (args['width'] as num?)?.toInt() ?? base.width;
-    final height = (args['height'] as num?)?.toInt() ?? base.height;
+    final sharedWidth = (args['width'] as num?)?.toInt() ?? base.width;
+    final sharedHeight = (args['height'] as num?)?.toInt() ?? base.height;
+    final sharedSteps = (args['steps'] as int?) ?? base.steps;
+    final sharedSampler = (args['sampler'] as String?) ?? base.sampler;
+    final sharedScale = (args['scale'] as num?)?.toDouble() ?? base.scale;
+    final width = firstVariation?.width ?? sharedWidth;
+    final height = firstVariation?.height ?? sharedHeight;
+    final steps = firstVariation?.steps ?? sharedSteps;
+    final sampler = firstVariation?.sampler ?? sharedSampler;
+    final scale = firstVariation?.scale ?? sharedScale;
     final resolutionIssue = NaiResolutionAdapter.validateGenerationResolution(
       width,
       height,
@@ -76,6 +87,25 @@ class GenerationExecutionService {
         'size: ${resolutionIssue.suggestedWidth}x'
         '${resolutionIssue.suggestedHeight}.',
       );
+    }
+    if (prompts != null) {
+      for (var index = 0; index < prompts.length; index++) {
+        final entryWidth = prompts[index].width ?? sharedWidth;
+        final entryHeight = prompts[index].height ?? sharedHeight;
+        if (NaiResolutionAdapter.validateGenerationResolution(
+              entryWidth,
+              entryHeight,
+            ) !=
+            null) {
+          return generationErrorResult(
+            'Invalid generation resolution ${entryWidth}x$entryHeight for '
+            '"prompts[$index]". Width and height must be multiples of 64, '
+            'each side must be between 64 and '
+            '${NaiResolutionAdapter.generationMaxSide}, and total pixels must '
+            'not exceed ${NaiResolutionAdapter.officialMaxPixels}.',
+          );
+        }
+      }
     }
     final negativePrompt =
         (args['negative_prompt'] as String?)?.trim() ?? base.negativePrompt;
@@ -175,13 +205,32 @@ class GenerationExecutionService {
               : 'Generating $count prompts...',
         ),
       );
-      final params = base.copyWith(
+      // Each multi-prompt entry starts from the same shared run values, so an
+      // entry that omits width/height/steps does not inherit the previous
+      // entry's overrides.
+      final variationBase = prompts == null
+          ? null
+          : base.copyWith(
+              prompt: prompt,
+              width: sharedWidth,
+              height: sharedHeight,
+              steps: sharedSteps,
+              sampler: sharedSampler,
+              scale: sharedScale,
+              seed: -1,
+              nSamples: count,
+            );
+      final params = (variationBase ?? base).copyWith(
         prompt: prompt,
         negativePrompt: negativePrompt,
         width: width,
         height: height,
-        // count > 1 时应用原生管线会给每批随机种子（与生成页一致）。
-        seed: requestedSeed,
+        steps: steps,
+        sampler: sampler,
+        scale: scale,
+        // count > 1 时应用原生管线会给每批随机种子（与生成页一致）；
+        // 多提示词条目可用 seed 单独固定，否则逐张随机。
+        seed: prompts != null ? (firstVariation?.seed ?? -1) : requestedSeed,
         nSamples: count,
         action: action,
         sourceImage: sourceBytes,
@@ -190,6 +239,15 @@ class GenerationExecutionService {
         noise: noise ?? base.noise,
         inpaintStrength: inpaintStrength ?? base.inpaintStrength,
       );
+      // The first entry may carry its own cast; later entries get theirs in
+      // preparePromptVariation. Entries without a cast keep the shared one.
+      final firstCharacters = firstVariation?.characters;
+      final batchParams = firstCharacters == null
+          ? params
+          : params.copyWith(
+              characters: firstCharacters,
+              useCoords: firstVariation?.useCoords ?? false,
+            );
       final previousImageIds = _ref
           .read(imageGenerationNotifierProvider)
           .currentImages
@@ -199,10 +257,11 @@ class GenerationExecutionService {
       final invocation = _ref
           .read(imageGenerationNotifierProvider.notifier)
           .generate(
-            params,
+            batchParams,
             batchSizeOverride: prepared.batchSize,
             preserveCharacterSnapshot: true,
             promptVariations: prompts,
+            promptVariationBase: variationBase,
           );
       final finished = await _waitForCompletion(
         invocation: invocation,
