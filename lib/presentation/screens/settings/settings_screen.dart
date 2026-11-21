@@ -59,7 +59,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late SettingsSection _selectedSection;
   final _contentScrollController = OwnedScrollController();
-  bool _isContentScrolled = false;
+  final _contentScrolled = ValueNotifier<bool>(false);
   bool _showCompactDetail = false;
   int _externalSectionRevision = 0;
   Future<bool>? _discardConfirmation;
@@ -184,13 +184,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void dispose() {
     _contentScrollController.removeListener(_onContentScroll);
     _contentScrollController.dispose();
+    _contentScrolled.dispose();
     super.dispose();
   }
 
   void _onContentScroll() {
-    final scrolled = _contentScrollController.offset > 0;
-    if (scrolled != _isContentScrolled) {
-      setState(() => _isContentScrolled = scrolled);
+    // Hysteresis keeps an app bar from flickering between two surface colors
+    // when a trackpad or wheel oscillates around the very top. The value is
+    // consumed by the app bar only, so scrolling no longer rebuilds the whole
+    // section tree.
+    final offset = _contentScrollController.offset;
+    final next = _contentScrolled.value ? offset > 2 : offset > 8;
+    if (next != _contentScrolled.value) {
+      _contentScrolled.value = next;
     }
   }
 
@@ -208,13 +214,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     setState(() {
       _selectedSection = section;
       _showCompactDetail = showCompactDetail;
-      _contentScrollController.viewport.replace(0);
-      _contentScrollController.clearLayoutRestore();
-      if (_contentScrollController.hasClients) {
-        _contentScrollController.jumpTo(0);
-      }
-      _isContentScrolled = false;
     });
+    // Reset outside setState so the scroll listener cannot schedule a nested
+    // rebuild while the old section is still mounted.
+    _contentScrollController.viewport.replace(0);
+    _contentScrollController.clearLayoutRestore();
+    if (_contentScrollController.hasClients) {
+      _contentScrollController.jumpTo(0);
+    }
+    _contentScrolled.value = false;
     return true;
   }
 
@@ -309,10 +317,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _returnToCompactSettingsList() async {
     if (!_showCompactDetail) return;
     if (!await _confirmDiscardAgentDraft()) return;
-    setState(() {
-      _showCompactDetail = false;
-      _isContentScrolled = false;
-    });
+    setState(() => _showCompactDetail = false);
+    _contentScrolled.value = false;
   }
 
   Widget _buildCompactSettings(
@@ -352,6 +358,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 )
               : ListView.separated(
                   key: const ValueKey('settings-section-list'),
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
                   itemCount: sections.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 8),
@@ -387,31 +395,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  AppBar _buildAppBar(
+  PreferredSizeWidget _buildAppBar(
     BuildContext context,
     ThemeData theme, {
     Widget? leading,
   }) {
-    return AppBar(
-      key: const ValueKey('settings-tonal-app-bar'),
-      leading: leading,
-      title: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.settings_outlined,
-            size: 22,
-            color: theme.colorScheme.primary,
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(kToolbarHeight),
+      child: ValueListenableBuilder<bool>(
+        valueListenable: _contentScrolled,
+        builder: (context, scrolled, _) => AppBar(
+          key: const ValueKey('settings-tonal-app-bar'),
+          leading: leading,
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.settings_outlined,
+                size: 22,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 10),
+              Flexible(child: Text(context.l10n.settings_title)),
+            ],
           ),
-          const SizedBox(width: 10),
-          Flexible(child: Text(context.l10n.settings_title)),
-        ],
+          backgroundColor: scrolled
+              ? controlSurfaceColor(theme.colorScheme)
+              : sectionSurfaceColor(theme.colorScheme),
+          surfaceTintColor: Colors.transparent,
+          scrolledUnderElevation: 0,
+        ),
       ),
-      backgroundColor: _isContentScrolled
-          ? controlSurfaceColor(theme.colorScheme)
-          : sectionSurfaceColor(theme.colorScheme),
-      surfaceTintColor: Colors.transparent,
-      scrolledUnderElevation: 0,
     );
   }
 
@@ -422,6 +436,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         builder: (context, constraints) => SingleChildScrollView(
           key: const ValueKey('settings-section-scroll-view'),
           controller: _contentScrollController,
+          primary: false,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: padding,
           child: Align(
             alignment: Alignment.topCenter,
