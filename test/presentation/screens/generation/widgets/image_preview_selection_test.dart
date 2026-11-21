@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:nai_launcher/core/shortcuts/shortcut_config.dart';
@@ -342,6 +343,48 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('mixed aspect results use masonry with per-image ratios', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        imageGenerationNotifierProvider.overrideWith(
+          () => _SelectionImageGenerationNotifier(
+            ImageGenerationState(
+              displayImages: [
+                _portraitImage(),
+                _landscapeImage(),
+              ],
+            ),
+          ),
+        ),
+        shortcutConfigNotifierProvider.overrideWith(
+          _DefaultShortcutConfigNotifier.new,
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(_app(container, size: const Size(900, 600)));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MasonryGridView), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is AspectRatio && widget.aspectRatio == 4 / 6,
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is AspectRatio && widget.aspectRatio == 6 / 4,
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(SelectableImageCard), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('compact single preview keeps the metadata strip tight', (
     tester,
   ) async {
@@ -404,6 +447,17 @@ GeneratedImage _portraitImage() {
     bytes: Uint8List.fromList(img.encodePng(image)),
     width: 4,
     height: 6,
+  );
+}
+
+GeneratedImage _landscapeImage() {
+  final image = img.Image(width: 6, height: 4);
+  image.clear(img.ColorRgba8(20, 80, 30, 255));
+  return GeneratedImage(
+    id: 'landscape',
+    bytes: Uint8List.fromList(img.encodePng(image)),
+    width: 6,
+    height: 4,
   );
 }
 

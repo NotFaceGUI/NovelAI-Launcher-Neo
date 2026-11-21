@@ -11,6 +11,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../../core/enums/precise_ref_type.dart';
@@ -130,13 +131,19 @@ class PreviewNavShortcuts extends ConsumerWidget {
 class ImagePreviewWidget extends ConsumerStatefulWidget {
   const ImagePreviewWidget({super.key});
 
-  /// Resolves a grid that never squeezes preview cards below their usable size.
+  /// Resolves masonry columns for mixed-aspect results.
+  ///
+  /// Columns are capped by a readable minimum card width instead of squeezing
+  /// every image to force one screen. Masonry then fills each column's vertical
+  /// gaps independently, so portrait and landscape prompts can share a row.
   @visibleForTesting
   static int resolveGridColumnCount(int imageCount, double availableWidth) {
-    const minCardWidth = 150.0;
+    const minCardWidth = 240.0;
     const spacing = 12.0;
     const horizontalPadding = 16.0;
-    final idealColumns = imageCount <= 4
+    final countCap = imageCount <= 2
+        ? imageCount
+        : imageCount <= 4
         ? 2
         : imageCount <= 6
         ? 3
@@ -146,7 +153,13 @@ class ImagePreviewWidget extends ConsumerStatefulWidget {
       1,
       ((usableWidth + spacing) / (minCardWidth + spacing)).floor(),
     );
-    return min(idealColumns, fittingColumns);
+    return max(1, min(countCap, fittingColumns));
+  }
+
+  static double _previewAspectRatio(double value) {
+    // Keep the image's real canvas ratio: NAI allows 1:3 and 3:1 presets, and
+    // clamping would crop them inside the card.
+    return value.isFinite && value > 0 ? value : 1;
   }
 
   @override
@@ -349,16 +362,17 @@ class _ImagePreviewWidgetState extends ConsumerState<ImagePreviewWidget> {
     );
   }
 
-  /// 构建多图网格视图
+  /// 构建多图瀑布流视图。
+  ///
+  /// 每条多提示词可以使用不同画幅，因此不能再共用第一张图的格子比例。
+  /// 瀑布流按每张图自身比例给高度，并始终放进当前最短的列，尽量填满
+  /// 纵向空隙；列数仍由容器宽度和最小可读卡片宽度决定。
   Widget _buildMultiImageGrid(
     BuildContext context,
     WidgetRef ref,
     List<GeneratedImage> images,
     ThemeData theme,
   ) {
-    // 使用第一张图像的宽高比（同一批次图像分辨率相同）
-    final aspectRatio = images.isNotEmpty ? images.first.aspectRatio : 1.0;
-
     return LayoutBuilder(
       builder: (context, constraints) {
         final crossAxisCount = ImagePreviewWidget.resolveGridColumnCount(
@@ -366,23 +380,26 @@ class _ImagePreviewWidgetState extends ConsumerState<ImagePreviewWidget> {
           constraints.maxWidth,
         );
 
-        return GridView.builder(
+        return MasonryGridView.count(
+          key: const ValueKey('generation-image-masonry'),
           padding: const EdgeInsets.all(8),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: aspectRatio,
-          ),
+          crossAxisCount: crossAxisCount,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
           itemCount: images.length,
           itemBuilder: (context, index) {
             final image = images[index];
-            return _buildGeneratedImageCard(
-              context: context,
-              ref: ref,
-              image: image,
-              index: index,
-              showIndex: true,
+            return AspectRatio(
+              aspectRatio: ImagePreviewWidget._previewAspectRatio(
+                image.aspectRatio,
+              ),
+              child: _buildGeneratedImageCard(
+                context: context,
+                ref: ref,
+                image: image,
+                index: index,
+                showIndex: true,
+              ),
             );
           },
         );
@@ -403,7 +420,9 @@ class _ImagePreviewWidgetState extends ConsumerState<ImagePreviewWidget> {
     final previewSlots = _visibleStreamPreviewSlots(state);
     final generatingCount = previewSlots.isNotEmpty ? previewSlots.length : 1;
     final totalItems = completedImages.length + generatingCount;
-    final aspectRatio = imageWidth / imageHeight;
+    final generatingAspectRatio = ImagePreviewWidget._previewAspectRatio(
+      imageWidth / imageHeight,
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -412,25 +431,28 @@ class _ImagePreviewWidgetState extends ConsumerState<ImagePreviewWidget> {
           constraints.maxWidth,
         );
 
-        return GridView.builder(
+        return MasonryGridView.count(
+          key: const ValueKey('generation-generating-masonry'),
           padding: const EdgeInsets.all(8),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: aspectRatio,
-          ),
+          crossAxisCount: crossAxisCount,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
           itemCount: totalItems,
           itemBuilder: (context, index) {
             // 已完成的图像
             if (index < completedImages.length) {
               final image = completedImages[index];
-              return _buildGeneratedImageCard(
-                context: context,
-                ref: ref,
-                image: image,
-                index: index,
-                showIndex: true,
+              return AspectRatio(
+                aspectRatio: ImagePreviewWidget._previewAspectRatio(
+                  image.aspectRatio,
+                ),
+                child: _buildGeneratedImageCard(
+                  context: context,
+                  ref: ref,
+                  image: image,
+                  index: index,
+                  showIndex: true,
+                ),
               );
             }
 
@@ -438,26 +460,32 @@ class _ImagePreviewWidgetState extends ConsumerState<ImagePreviewWidget> {
             if (previewSlots.isNotEmpty &&
                 generationIndex < previewSlots.length) {
               final slot = previewSlots[generationIndex];
-              return _buildGeneratingCard(
-                imageWidth: imageWidth,
-                imageHeight: imageHeight,
-                currentImage: slot.imageNumber,
-                totalImages: slot.totalImages,
-                progress: slot.progress,
-                postprocessPhase: slot.postprocessPhase,
-                streamPreview: slot.previewBytes,
-                focusedPreviewPlacement: slot.focusedPreviewPlacement,
+              return AspectRatio(
+                aspectRatio: generatingAspectRatio,
+                child: _buildGeneratingCard(
+                  imageWidth: imageWidth,
+                  imageHeight: imageHeight,
+                  currentImage: slot.imageNumber,
+                  totalImages: slot.totalImages,
+                  progress: slot.progress,
+                  postprocessPhase: slot.postprocessPhase,
+                  streamPreview: slot.previewBytes,
+                  focusedPreviewPlacement: slot.focusedPreviewPlacement,
+                ),
               );
             }
 
-            return _buildGeneratingCard(
-              imageWidth: imageWidth,
-              imageHeight: imageHeight,
-              currentImage: state.currentImage,
-              totalImages: state.totalImages,
-              progress: state.progress,
-              streamPreview: state.streamPreview,
-              focusedPreviewPlacement: state.focusedPreviewPlacement,
+            return AspectRatio(
+              aspectRatio: generatingAspectRatio,
+              child: _buildGeneratingCard(
+                imageWidth: imageWidth,
+                imageHeight: imageHeight,
+                currentImage: state.currentImage,
+                totalImages: state.totalImages,
+                progress: state.progress,
+                streamPreview: state.streamPreview,
+                focusedPreviewPlacement: state.focusedPreviewPlacement,
+              ),
             );
           },
         );

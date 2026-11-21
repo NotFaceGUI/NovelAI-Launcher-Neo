@@ -3,10 +3,14 @@ import 'package:nai_launcher/presentation/screens/generation/widgets/image_previ
 import 'package:nai_launcher/presentation/screens/generation/widgets/main_workspace.dart';
 
 void main() {
-  test('preview grid uses one column on phones and expands by width', () {
+  test('preview masonry keeps readable cards and fills the width', () {
     expect(ImagePreviewWidget.resolveGridColumnCount(4, 320), 1);
     expect(ImagePreviewWidget.resolveGridColumnCount(4, 600), 2);
     expect(ImagePreviewWidget.resolveGridColumnCount(6, 1000), 3);
+    expect(ImagePreviewWidget.resolveGridColumnCount(5, 1180), 3);
+    expect(ImagePreviewWidget.resolveGridColumnCount(7, 1600), 4);
+    expect(ImagePreviewWidget.resolveGridColumnCount(2, 1600), 2);
+    expect(ImagePreviewWidget.resolveGridColumnCount(8, 390), 1);
   });
 
   group('MainWorkspace classic prompt height', () {
