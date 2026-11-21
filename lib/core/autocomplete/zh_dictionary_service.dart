@@ -45,10 +45,13 @@ class ZhDictionaryService extends ChangeNotifier
   final Future<Directory> Function() _applicationSupportDirectory;
   Database? _database;
   CancelToken? _cancelToken;
+  Directory? _directory;
   String? _databasePath;
+  String? _activeFileName;
   String? _metadataPath;
   ZhDictionaryState _state = const ZhDictionaryState();
   ZhDictionarySource? _pendingUpdateSource;
+  ZhDictionarySource? _checkedSource;
   Future<void>? _initialization;
 
   ZhDictionaryDownloader get _downloader => ZhDictionaryDownloader(dio: _dio);
@@ -67,33 +70,96 @@ class ZhDictionaryService extends ChangeNotifier
     final appDir = await _applicationSupportDirectory();
     final directory = Directory(p.join(appDir.path, 'autocomplete', 'ffdkj'));
     await directory.create(recursive: true);
+    _directory = directory;
     _databasePath = p.join(directory.path, 'tag.sqlite');
     _metadataPath = p.join(directory.path, 'metadata.json');
     await _loadInstalledState();
   }
 
   Future<void> _loadInstalledState() async {
-    final file = File(_databasePath!);
-    if (!await file.exists()) {
-      _setState(const ZhDictionaryState());
-      return;
-    }
-    try {
-      final count = await _validate(file.path);
-      final metadata = await _readMetadata();
-      _setState(
-        ZhDictionaryState(
-          isInstalled: true,
-          tagCount: count,
-          version: metadata['blobSha'] as String?,
-          lastCheckedAt: DateTime.tryParse(
-            metadata['lastCheckedAt'] as String? ?? '',
+    final directory = _directory!;
+    final metadata = await _readMetadata();
+    final activeName = (metadata['fileName'] as String?)?.trim();
+    final candidates = <String>[
+      if (activeName != null && activeName.isNotEmpty)
+        p.join(directory.path, activeName),
+      // Legacy installs (and older metadata) use the fixed file name.
+      p.join(directory.path, 'tag.sqlite'),
+    ];
+    Object? lastError;
+    for (final candidate in candidates) {
+      final file = File(candidate);
+      if (!await file.exists()) continue;
+      try {
+        final count = await _validate(file.path);
+        final candidateName = p.basename(file.path);
+        final usesMetadataFile =
+            activeName == null || candidateName == activeName;
+        _databasePath = file.path;
+        _activeFileName = candidateName;
+        _setState(
+          ZhDictionaryState(
+            isInstalled: true,
+            tagCount: count,
+            version: usesMetadataFile
+                ? metadata['blobSha'] as String?
+                : null,
+            commitSha: usesMetadataFile
+                ? metadata['commitSha'] as String?
+                : null,
+            lastCheckedAt: DateTime.tryParse(
+              metadata['lastCheckedAt'] as String? ?? '',
+            ),
           ),
-        ),
+        );
+        await _cleanupStaleFiles(directory);
+        return;
+      } catch (error, stack) {
+        lastError = error;
+        AppLogger.e('Installed ffdkj dictionary is invalid', error, stack);
+      }
+    }
+    _activeFileName = null;
+    _setState(
+      lastError == null
+          ? const ZhDictionaryState()
+          : ZhDictionaryState(error: lastError.toString()),
+    );
+    // A previously installed file may have been deleted or renamed while the
+    // app was closed; remove the leftovers so the next install starts clean.
+    await _cleanupStaleFiles(directory);
+  }
+
+  /// Deletes superseded dictionary files. Windows may briefly keep a closed
+  /// SQLite file mapped by an indexer or antivirus, so failures are logged and
+  /// retried on the next startup instead of failing the install.
+  Future<void> _cleanupStaleFiles(Directory directory) async {
+    final metadataName = p.basename(_metadataPath!);
+    try {
+      await for (final entity in directory.list(followLinks: false)) {
+        if (entity is! File) continue;
+        final name = p.basename(entity.path);
+        if (name == metadataName || name == _activeFileName) continue;
+        final isDictionary =
+            name == 'tag.sqlite' ||
+            (name.startsWith('tag-') && name.endsWith('.sqlite')) ||
+            name.endsWith('.sqlite.backup') ||
+            name.endsWith('.sqlite.downloading');
+        if (!isDictionary) continue;
+        try {
+          await entity.delete();
+        } catch (error) {
+          AppLogger.w(
+            'Unable to remove stale ffdkj file $name: $error',
+            'ZhDictionary',
+          );
+        }
+      }
+    } catch (error) {
+      AppLogger.w(
+        'Unable to scan ffdkj directory for stale files: $error',
+        'ZhDictionary',
       );
-    } catch (error, stack) {
-      AppLogger.e('Installed ffdkj dictionary is invalid', error, stack);
-      _setState(ZhDictionaryState(error: error.toString()));
     }
   }
 
@@ -109,10 +175,18 @@ class ZhDictionaryService extends ChangeNotifier
     try {
       final remote = await _downloader.fetchLatestSource();
       final now = DateTime.now();
-      final available = remote.blobSha != _state.version;
+      final metadata = await _readMetadata();
+      final installedCommit =
+          _state.commitSha ?? metadata['commitSha'] as String?;
+      // A commit-scoped comparison survives metadata written before commit
+      // SHAs were persisted; fall back to the blob SHA for those installs.
+      final available = installedCommit != null
+          ? remote.commitSha != installedCommit
+          : remote.blobSha == null || remote.blobSha != _state.version;
+      _checkedSource = remote;
       _pendingUpdateSource = available ? remote : null;
       await _writeMetadata({
-        ...(await _readMetadata()),
+        ...metadata,
         'lastCheckedAt': now.toUtc().toIso8601String(),
       });
       _setState(
@@ -124,9 +198,13 @@ class ZhDictionaryService extends ChangeNotifier
       );
       return available;
     } on ZhDictionaryException catch (error, stack) {
+      _checkedSource = null;
+      _pendingUpdateSource = null;
       _recordFailure(error, stack);
       return false;
     } catch (error, stack) {
+      _checkedSource = null;
+      _pendingUpdateSource = null;
       _recordUnexpectedFailure(error, stack);
       return false;
     }
@@ -137,9 +215,8 @@ class ZhDictionaryService extends ChangeNotifier
     if (_state.isBusy) return;
     _cancelToken = CancelToken();
     _setState(_state.copyWith(isBusy: true, progress: 0, clearError: true));
-    final target = File(_databasePath!);
-    final temp = File('${target.path}.downloading');
-    final backup = File('${target.path}.backup');
+    final directory = _directory!;
+    final temp = File(p.join(directory.path, 'tag.sqlite.downloading'));
     try {
       final remote = await _sourceForInstall();
       await temp.deleteIfExists();
@@ -153,15 +230,15 @@ class ZhDictionaryService extends ChangeNotifier
           }
         },
       );
-      if (await temp.length() != remote.size) {
+      if (remote.size > 0 && await temp.length() != remote.size) {
         throw const ZhDictionaryException(
           stage: ZhDictionaryFailureStage.integrity,
           kind: ZhDictionaryFailureKind.integrity,
           diagnostic: 'Downloaded dictionary size does not match metadata',
         );
       }
-      final blobSha = await _gitBlobSha(temp);
-      if (blobSha != remote.blobSha) {
+      final downloadedBlobSha = await _gitBlobSha(temp);
+      if (remote.blobSha != null && downloadedBlobSha != remote.blobSha) {
         throw const ZhDictionaryException(
           stage: ZhDictionaryFailureStage.integrity,
           kind: ZhDictionaryFailureKind.integrity,
@@ -177,38 +254,53 @@ class ZhDictionaryService extends ChangeNotifier
       }
       final count = await _validateDownloadedDatabase(temp.path);
 
+      // Never rename over the active file: Windows can keep a just-closed
+      // SQLite file locked by an indexer or antivirus and a same-path replace
+      // then fails with "another program is using this file". Each install
+      // gets its own file and the metadata pointer switches atomically.
+      final version = remote.blobSha ?? downloadedBlobSha;
+      var finalName = 'tag-$version.sqlite';
+      var finalFile = File(p.join(directory.path, finalName));
+      if (await finalFile.exists() || finalName == _activeFileName) {
+        finalName =
+            'tag-$version-${DateTime.now().microsecondsSinceEpoch}.sqlite';
+        finalFile = File(p.join(directory.path, finalName));
+      }
+
       await _database?.close();
       _database = null;
-      await backup.deleteIfExists();
-      if (await target.exists()) await target.rename(backup.path);
+      await temp.rename(finalFile.path);
       try {
-        await temp.rename(target.path);
         await _writeMetadata({
-          'blobSha': remote.blobSha,
+          'fileName': finalName,
+          'blobSha': version,
           'commitSha': remote.commitSha,
           if (remote.sha256 != null) 'sha256': remote.sha256,
           'etag': remote.etag,
-          'size': remote.size,
+          'size': await finalFile.length(),
           'installedAt': DateTime.now().toUtc().toIso8601String(),
           'lastCheckedAt': DateTime.now().toUtc().toIso8601String(),
           'source': remote.downloadUri.toString(),
         });
-        await backup.deleteIfExists();
       } catch (_) {
-        await target.deleteIfExists();
-        if (await backup.exists()) await backup.rename(target.path);
+        await finalFile.deleteIfExists();
         rethrow;
       }
+      _databasePath = finalFile.path;
+      _activeFileName = finalName;
       _setState(
         ZhDictionaryState(
           isInstalled: true,
           tagCount: count,
-          version: remote.blobSha,
+          version: version,
+          commitSha: remote.commitSha,
           progress: 1,
           lastCheckedAt: DateTime.now(),
         ),
       );
       _pendingUpdateSource = null;
+      _checkedSource = null;
+      await _cleanupStaleFiles(directory);
     } on ZhDictionaryException catch (error, stack) {
       _recordFailure(error, stack, isBusy: false);
       rethrow;
@@ -229,19 +321,38 @@ class ZhDictionaryService extends ChangeNotifier
 
   Future<ZhDictionarySource> _sourceForInstall() async {
     if (_pendingUpdateSource != null) return _pendingUpdateSource!;
-    if (!_state.isInstalled || _state.version == _pinnedSource.blobSha) {
-      return _pinnedSource;
+    if (!_state.isInstalled) return _pinnedSource;
+    if (_checkedSource case final checked?) return checked;
+    try {
+      return await _downloader.fetchLatestSource(cancelToken: _cancelToken);
+    } catch (_) {
+      // Never silently downgrade an installation that came from a later
+      // commit; only a pinned install may repair from the bundled source.
+      if (_state.version == null || _state.version == _pinnedSource.blobSha) {
+        return _pinnedSource;
+      }
+      rethrow;
     }
-    return _downloader.fetchLatestSource(cancelToken: _cancelToken);
   }
 
   Future<void> remove() async {
     await initialize();
     await _database?.close();
     _database = null;
-    await File(_databasePath!).deleteIfExists();
+    try {
+      await File(_databasePath!).deleteIfExists();
+    } catch (error) {
+      AppLogger.w(
+        'Unable to delete the active ffdkj dictionary immediately: $error',
+        'ZhDictionary',
+      );
+    }
     await File(_metadataPath!).deleteIfExists();
+    _activeFileName = null;
+    _pendingUpdateSource = null;
+    _checkedSource = null;
     _setState(const ZhDictionaryState());
+    if (_directory != null) await _cleanupStaleFiles(_directory!);
   }
 
   @override

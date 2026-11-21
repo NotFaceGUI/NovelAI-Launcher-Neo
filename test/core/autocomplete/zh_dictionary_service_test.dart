@@ -326,6 +326,59 @@ void main() {
   });
 
   test(
+    'discovers updates through the commit feed when the API is rate limited',
+    () async {
+      const feedCommit = '4444444444444444444444444444444444444444';
+      final adapter = _RoutingAdapter((request) {
+        if (request.uri.host == 'api.github.com') {
+          return ResponseBody.fromString(
+            jsonEncode({'message': 'API rate limit exceeded'}),
+            403,
+            headers: {
+              Headers.contentTypeHeader: [Headers.jsonContentType],
+              'x-ratelimit-limit': ['60'],
+              'x-ratelimit-remaining': ['0'],
+            },
+          );
+        }
+        if (request.uri.host == 'github.com' &&
+            request.uri.path.endsWith('.atom')) {
+          return ResponseBody.fromString(
+            '<feed><entry><id>tag:github.com,2008:Grit::Commit/'
+            '$feedCommit</id></entry></feed>',
+            200,
+            headers: {
+              Headers.contentTypeHeader: ['application/atom+xml'],
+            },
+          );
+        }
+        expect(request.method, 'HEAD');
+        expect(request.uri.host, 'raw.githubusercontent.com');
+        expect(request.uri.path, contains(feedCommit));
+        return ResponseBody.fromString(
+          '',
+          200,
+          headers: {
+            Headers.contentLengthHeader: ['12345'],
+            'etag': ['"feed-etag"'],
+          },
+        );
+      });
+      final dio = Dio()..httpClientAdapter = adapter;
+
+      final source = await ZhDictionaryDownloader(
+        dio: dio,
+      ).fetchLatestSource();
+
+      expect(source.commitSha, feedCommit);
+      expect(source.blobSha, isNull);
+      expect(source.size, 12345);
+      expect(source.etag, '"feed-etag"');
+      expect(source.downloadUri.path, contains(feedCommit));
+    },
+  );
+
+  test(
     'falls back to the official Git blob endpoint when raw is blocked',
     () async {
       const bytes = [1, 2, 3, 4];
@@ -384,12 +437,150 @@ void main() {
       expect(adapter.requests, hasLength(1));
       expect(adapter.requests.single.uri, source.downloadUri);
       expect(adapter.requests.single.uri.host, 'raw.githubusercontent.com');
+      final metadata = jsonDecode(
+        await File(
+          p.join(temp.path, 'autocomplete', 'ffdkj', 'metadata.json'),
+        ).readAsString(),
+      ) as Map<String, dynamic>;
+      expect(metadata['fileName'], 'tag-${source.blobSha}.sqlite');
       expect(
         await File(
-          p.join(temp.path, 'autocomplete', 'ffdkj', 'tag.sqlite'),
+          p.join(
+            temp.path,
+            'autocomplete',
+            'ffdkj',
+            metadata['fileName'] as String,
+          ),
         ).readAsBytes(),
         bytes,
       );
+    },
+  );
+
+  test(
+    'installs an update beside a locked active file instead of renaming it',
+    () async {
+      final first = _createDictionary(
+        p.join(temp.path, 'update-first.sqlite'),
+        rows: 1000,
+        extraRows: const {'first_version': '第一版'},
+      );
+      final second = _createDictionary(
+        p.join(temp.path, 'update-second.sqlite'),
+        rows: 1001,
+        extraRows: const {'second_version': '第二版'},
+      );
+      final firstBytes = await first.readAsBytes();
+      final secondBytes = await second.readAsBytes();
+      final firstSource = _testSource(firstBytes);
+      final secondSource = ZhDictionarySource(
+        commitSha: '5555555555555555555555555555555555555555',
+        blobSha: _gitBlobSha(secondBytes),
+        size: secondBytes.length,
+        downloadUri: Uri.parse(
+          'https://raw.githubusercontent.com/ffdkj/'
+          'ffdkj-Danbooru_Tag-Chinese-English-Translation-Table/'
+          '5555555555555555555555555555555555555555/tag.sqlite',
+        ),
+      );
+      final dio = Dio()
+        ..httpClientAdapter = _RoutingAdapter(
+          (_) => ResponseBody.fromBytes(
+            firstBytes,
+            200,
+            headers: {
+              Headers.contentLengthHeader: ['${firstBytes.length}'],
+            },
+          ),
+        );
+      service.dispose();
+      service = ZhDictionaryService(
+        dio: dio,
+        pinnedSource: firstSource,
+        applicationSupportDirectory: () async => temp,
+      );
+      await service.installOrUpdate();
+      final dictionaryDirectory = Directory(
+        p.join(temp.path, 'autocomplete', 'ffdkj'),
+      );
+      final firstMetadata =
+          jsonDecode(
+                await File(
+                  p.join(dictionaryDirectory.path, 'metadata.json'),
+                ).readAsString(),
+              )
+              as Map<String, dynamic>;
+      final firstPath = p.join(
+        dictionaryDirectory.path,
+        firstMetadata['fileName'] as String,
+      );
+      final lock = native.sqlite3.open(firstPath);
+      try {
+        dio.httpClientAdapter = _RoutingAdapter((request) {
+          if (request.uri.host == 'api.github.com' &&
+              request.uri.path.endsWith('/commits')) {
+            return ResponseBody.fromString(
+              jsonEncode([
+                {'sha': secondSource.commitSha},
+              ]),
+              200,
+              headers: {
+                Headers.contentTypeHeader: [Headers.jsonContentType],
+              },
+            );
+          }
+          if (request.uri.host == 'api.github.com' &&
+              request.uri.path.contains('/contents/tag.sqlite')) {
+            return ResponseBody.fromString(
+              jsonEncode({
+                'path': 'tag.sqlite',
+                'sha': secondSource.blobSha,
+                'size': secondBytes.length,
+              }),
+              200,
+              headers: {
+                Headers.contentTypeHeader: [Headers.jsonContentType],
+              },
+            );
+          }
+          expect(request.uri.host, 'raw.githubusercontent.com');
+          return ResponseBody.fromBytes(
+            secondBytes,
+            200,
+            headers: {
+              Headers.contentLengthHeader: ['${secondBytes.length}'],
+            },
+          );
+        });
+
+        expect(await service.checkForUpdate(force: true), isTrue);
+        await service.installOrUpdate();
+
+        final secondMetadata =
+            jsonDecode(
+                  await File(
+                    p.join(dictionaryDirectory.path, 'metadata.json'),
+                  ).readAsString(),
+                )
+                as Map<String, dynamic>;
+        expect(secondMetadata['fileName'], isNot(firstMetadata['fileName']));
+        expect(secondMetadata['blobSha'], secondSource.blobSha);
+        expect(
+          await File(
+            p.join(
+              dictionaryDirectory.path,
+              secondMetadata['fileName'] as String,
+            ),
+          ).readAsBytes(),
+          secondBytes,
+        );
+        expect(service.state.isInstalled, isTrue);
+        expect(service.state.version, secondSource.blobSha);
+        // The old file is still held open, so it cannot be removed yet.
+        expect(File(firstPath).existsSync(), isTrue);
+      } finally {
+        lock.dispose();
+      }
     },
   );
 

@@ -14,6 +14,13 @@ const _repositoryPath =
     'ffdkj/ffdkj-Danbooru_Tag-Chinese-English-Translation-Table';
 const _latestCommitApiUrl =
     'https://api.github.com/repos/$_repositoryPath/commits?path=tag.sqlite&sha=main&per_page=1';
+const _commitFeedUrl =
+    'https://github.com/$_repositoryPath/commits/main/tag.sqlite.atom';
+
+final _commitFeedIdPattern = RegExp(
+  r'Grit::Commit/([0-9a-f]{40})',
+  caseSensitive: false,
+);
 
 final ffdkjPinnedSource = ZhDictionarySource(
   commitSha: '3049e201002a64702873d7f9f3cc7cb8c45ea325',
@@ -35,62 +42,185 @@ class ZhDictionaryDownloader {
     CancelToken? cancelToken,
   }) async {
     try {
-      final commitResponse = await _dio.get<List<dynamic>>(
-        _latestCommitApiUrl,
+      return await _fetchLatestFromApi(cancelToken: cancelToken);
+    } on DioException catch (error, stack) {
+      if (CancelToken.isCancel(error)) rethrow;
+      return _fetchLatestFromCommitFeed(
         cancelToken: cancelToken,
-        options: Options(headers: _apiHeaders),
+        primary: _fromDio(
+          error,
+          stack,
+          stage: ZhDictionaryFailureStage.metadata,
+        ),
       );
-      final commits = commitResponse.data;
-      if (commits == null || commits.isEmpty || commits.first is! Map) {
-        throw const FormatException('GitHub returned empty commit metadata');
-      }
-      final commitSha = (commits.first as Map)['sha'] as String?;
-      if (!_isGitSha(commitSha)) {
-        throw const FormatException('GitHub returned an invalid commit SHA');
-      }
+    } on ZhDictionaryException catch (error) {
+      return _fetchLatestFromCommitFeed(
+        cancelToken: cancelToken,
+        primary: error,
+      );
+    } catch (error, stack) {
+      return _fetchLatestFromCommitFeed(
+        cancelToken: cancelToken,
+        primary: ZhDictionaryException(
+          stage: ZhDictionaryFailureStage.metadata,
+          kind: ZhDictionaryFailureKind.invalidData,
+          diagnostic: 'Metadata parsing failed: $error\n$stack',
+        ),
+      );
+    }
+  }
 
-      final contentsUri = Uri.https(
-        'api.github.com',
-        '/repos/$_repositoryPath/contents/tag.sqlite',
-        {'ref': commitSha},
+  Future<ZhDictionarySource> _fetchLatestFromApi({
+    CancelToken? cancelToken,
+  }) async {
+    final commitResponse = await _dio.get<List<dynamic>>(
+      _latestCommitApiUrl,
+      cancelToken: cancelToken,
+      options: Options(headers: _apiHeaders),
+    );
+    final commits = commitResponse.data;
+    if (commits == null || commits.isEmpty || commits.first is! Map) {
+      throw const FormatException('GitHub returned empty commit metadata');
+    }
+    final commitSha = (commits.first as Map)['sha'] as String?;
+    if (!_isGitSha(commitSha)) {
+      throw const FormatException('GitHub returned an invalid commit SHA');
+    }
+
+    final contentsUri = Uri.https(
+      'api.github.com',
+      '/repos/$_repositoryPath/contents/tag.sqlite',
+      {'ref': commitSha},
+    );
+    final contentsResponse = await _dio.get<Map<String, dynamic>>(
+      contentsUri.toString(),
+      cancelToken: cancelToken,
+      options: Options(headers: _apiHeaders),
+    );
+    final data = contentsResponse.data;
+    if (data == null || data['path'] != 'tag.sqlite') {
+      throw const FormatException('GitHub returned invalid file metadata');
+    }
+    final blobSha = data['sha'] as String?;
+    final size = (data['size'] as num?)?.toInt();
+    if (!_isGitSha(blobSha) || size == null || size <= 0) {
+      throw const FormatException(
+        'GitHub returned invalid file integrity metadata',
       );
-      final contentsResponse = await _dio.get<Map<String, dynamic>>(
-        contentsUri.toString(),
+    }
+    final source = ZhDictionarySource(
+      commitSha: commitSha!,
+      blobSha: blobSha!,
+      size: size,
+      downloadUri: _rawUri(commitSha),
+      etag: contentsResponse.headers.value('etag'),
+    );
+    validateSource(source);
+    return source;
+  }
+
+  /// The unauthenticated Contents API is limited to 60 requests per hour and
+  /// is frequently the reason update checks fail on shared networks. GitHub's
+  /// commit Atom feed is served from the web host instead, so use it as the
+  /// metadata fallback and discover the byte length with a raw URL HEAD. The
+  /// blob SHA is then verified locally after the download.
+  Future<ZhDictionarySource> _fetchLatestFromCommitFeed({
+    required ZhDictionaryException primary,
+    CancelToken? cancelToken,
+  }) async {
+    try {
+      final feedResponse = await _dio.get<String>(
+        _commitFeedUrl,
         cancelToken: cancelToken,
-        options: Options(headers: _apiHeaders),
+        options: Options(
+          responseType: ResponseType.plain,
+          headers: const {
+            'Accept': 'application/atom+xml',
+            'User-Agent': 'Aaalice-NAI-Launcher',
+          },
+        ),
       );
-      final data = contentsResponse.data;
-      if (data == null || data['path'] != 'tag.sqlite') {
-        throw const FormatException('GitHub returned invalid file metadata');
-      }
-      final blobSha = data['sha'] as String?;
-      final size = (data['size'] as num?)?.toInt();
-      if (!_isGitSha(blobSha) || size == null || size <= 0) {
+      final feed = feedResponse.data ?? '';
+      final commitSha = _commitFeedIdPattern.firstMatch(feed)?.group(1);
+      if (!_isGitSha(commitSha)) {
         throw const FormatException(
-          'GitHub returned invalid file integrity metadata',
+          'GitHub commit feed did not contain a commit SHA',
         );
       }
+      _logFeedFallback(primary, commitSha!);
+
+      var size = 0;
+      String? etag;
+      try {
+        final head = await _dio.head<void>(
+          _rawUri(commitSha).toString(),
+          cancelToken: cancelToken,
+          options: Options(
+            headers: const {
+              'Accept': 'application/octet-stream',
+              'Accept-Encoding': 'identity',
+              'User-Agent': 'Aaalice-NAI-Launcher',
+            },
+          ),
+        );
+        size = int.tryParse(
+              head.headers.value(Headers.contentLengthHeader) ?? '',
+            ) ??
+            0;
+        etag = head.headers.value('etag');
+      } on DioException catch (error) {
+        if (CancelToken.isCancel(error)) rethrow;
+        // The download itself still validates size and SQLite integrity.
+        AppLogger.w(
+          'ffdkj raw HEAD metadata failed; continuing without length\n'
+          '${_fromDio(error, StackTrace.current, stage: ZhDictionaryFailureStage.metadata).diagnostic}',
+          'ZhDictionary',
+        );
+      }
+
       final source = ZhDictionarySource(
-        commitSha: commitSha!,
-        blobSha: blobSha!,
+        commitSha: commitSha,
+        blobSha: null,
         size: size,
         downloadUri: _rawUri(commitSha),
-        etag: contentsResponse.headers.value('etag'),
+        etag: etag,
       );
       validateSource(source);
       return source;
     } on DioException catch (error, stack) {
       if (CancelToken.isCancel(error)) rethrow;
-      throw _fromDio(error, stack, stage: ZhDictionaryFailureStage.metadata);
+      final fallback = _fromDio(
+        error,
+        stack,
+        stage: ZhDictionaryFailureStage.metadata,
+      );
+      throw ZhDictionaryException(
+        stage: ZhDictionaryFailureStage.metadata,
+        kind: fallback.kind,
+        statusCode: fallback.statusCode,
+        diagnostic:
+            'GitHub Contents API failed:\n${primary.diagnostic}\n\n'
+            'Commit feed fallback:\n${fallback.diagnostic}',
+      );
     } on ZhDictionaryException {
       rethrow;
     } catch (error, stack) {
       throw ZhDictionaryException(
         stage: ZhDictionaryFailureStage.metadata,
         kind: ZhDictionaryFailureKind.invalidData,
-        diagnostic: 'Metadata parsing failed: $error\n$stack',
+        diagnostic:
+            'GitHub Contents API failed:\n${primary.diagnostic}\n\n'
+            'Commit feed fallback failed: $error\n$stack',
       );
     }
+  }
+
+  void _logFeedFallback(ZhDictionaryException primary, String commitSha) {
+    AppLogger.w(
+      'ffdkj GitHub Contents API unavailable; using commit feed '
+      '($commitSha)\n${primary.diagnostic}',
+      'ZhDictionary',
+    );
   }
 
   Future<void> download(
@@ -120,9 +250,11 @@ class ZhDictionaryDownloader {
         stage: ZhDictionaryFailureStage.download,
       );
       await File(targetPath).deleteIfExists();
+      final blobSha = source.blobSha;
+      if (blobSha == null) throw rawFailure;
       try {
         await _downloadFromUri(
-          _blobApiUri(source.blobSha).toString(),
+          _blobApiUri(blobSha).toString(),
           targetPath,
           cancelToken: cancelToken,
           onReceiveProgress: onReceiveProgress,
@@ -173,11 +305,19 @@ class ZhDictionaryDownloader {
 
   @visibleForTesting
   static void validateSource(ZhDictionarySource source) {
-    if (!_isGitSha(source.commitSha) || !_isGitSha(source.blobSha)) {
+    if (!_isGitSha(source.commitSha) ||
+        (source.blobSha != null && !_isGitSha(source.blobSha))) {
       throw const ZhDictionaryException(
         stage: ZhDictionaryFailureStage.metadata,
         kind: ZhDictionaryFailureKind.invalidData,
         diagnostic: 'Source contains an invalid Git SHA',
+      );
+    }
+    if (source.size < 0) {
+      throw const ZhDictionaryException(
+        stage: ZhDictionaryFailureStage.metadata,
+        kind: ZhDictionaryFailureKind.invalidData,
+        diagnostic: 'Source contains an invalid file size',
       );
     }
     final expected = _rawUri(source.commitSha);

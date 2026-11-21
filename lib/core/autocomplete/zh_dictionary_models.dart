@@ -43,8 +43,14 @@ class ZhDictionarySource {
   });
 
   final String commitSha;
-  final String blobSha;
+
+  /// GitHub Git blob SHA. Null when the update was discovered through the
+  /// commit Atom feed instead of the rate-limited Contents API; the service
+  /// computes it locally after download and persists the result.
+  final String? blobSha;
   final String? sha256;
+
+  /// Expected byte size. Zero means the upstream did not expose a length.
   final int size;
   final Uri downloadUri;
   final String? etag;
@@ -57,6 +63,7 @@ class ZhDictionaryState {
     this.progress = 0,
     this.tagCount = 0,
     this.version,
+    this.commitSha,
     this.updateAvailable = false,
     this.lastCheckedAt,
     this.error,
@@ -69,6 +76,7 @@ class ZhDictionaryState {
   final double progress;
   final int tagCount;
   final String? version;
+  final String? commitSha;
   final bool updateAvailable;
   final DateTime? lastCheckedAt;
   final String? error;
@@ -81,6 +89,7 @@ class ZhDictionaryState {
     double? progress,
     int? tagCount,
     String? version,
+    String? commitSha,
     bool? updateAvailable,
     DateTime? lastCheckedAt,
     String? error,
@@ -94,6 +103,7 @@ class ZhDictionaryState {
       progress: progress ?? this.progress,
       tagCount: tagCount ?? this.tagCount,
       version: version ?? this.version,
+      commitSha: commitSha ?? this.commitSha,
       updateAvailable: updateAvailable ?? this.updateAvailable,
       lastCheckedAt: lastCheckedAt ?? this.lastCheckedAt,
       error: clearError ? null : error ?? this.error,
