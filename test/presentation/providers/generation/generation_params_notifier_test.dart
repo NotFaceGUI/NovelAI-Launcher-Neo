@@ -8,6 +8,7 @@ import 'package:image/image.dart' as img;
 import 'package:nai_launcher/core/constants/api_constants.dart';
 import 'package:nai_launcher/core/constants/storage_keys.dart';
 import 'package:nai_launcher/core/enums/model_mode.dart';
+import 'package:nai_launcher/core/enums/precise_reference_image_mode.dart';
 import 'package:nai_launcher/core/enums/precise_ref_type.dart';
 import 'package:nai_launcher/core/services/anlas_calculator.dart';
 import 'package:nai_launcher/core/storage/local_storage_service.dart';
@@ -799,9 +800,10 @@ void main() {
     ], recordUsage: false);
     notifier.addPreciseReference(
       preciseBytes,
-      type: PreciseRefType.style,
+      type: PreciseRefType.character,
       strength: 0.4,
       fidelity: 0.8,
+      preferSameOutfit: true,
       isNormalizedPng: true,
     );
     notifier.updatePreciseReference(0, enabled: false);
@@ -832,9 +834,10 @@ void main() {
 
     final restoredPrecise = restored.preciseReferences.single;
     expect(restoredPrecise.image, preciseBytes);
-    expect(restoredPrecise.type, PreciseRefType.style);
+    expect(restoredPrecise.type, PreciseRefType.character);
     expect(restoredPrecise.strength, 0.4);
     expect(restoredPrecise.fidelity, 0.8);
+    expect(restoredPrecise.preferSameOutfit, isTrue);
     expect(restoredPrecise.enabled, isFalse);
     expect(
       NAIApiUtils.isKnownNormalizedPreciseReferencePng(restoredPrecise.image),
@@ -857,6 +860,7 @@ void main() {
       final notifier = container.read(
         generationParamsNotifierProvider.notifier,
       );
+      notifier.updateModel(ImageModels.animeDiffusionV45Full);
 
       final original = _validPngBytes(width: 8, height: 4);
       final normalization = notifier.addPreciseReferenceFromImage(
@@ -890,6 +894,46 @@ void main() {
       expect(reference.fidelity, 0.9);
     },
   );
+
+  test('V5 normalizes precise references into the aspect bucket', () async {
+    final container = ProviderContainer(
+      overrides: [
+        vibeLibraryStorageServiceProvider.overrideWithValue(
+          _FakeGenerationStateStorage(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final notifier = container.read(generationParamsNotifierProvider.notifier);
+    notifier.updateModel(ImageModels.animeDiffusionV5Full);
+
+    final original = _validPngBytes(width: 8, height: 4);
+    await notifier.addPreciseReferenceFromImage(
+      original,
+      type: PreciseRefType.character,
+      strength: 3.5,
+      fidelity: 0.4,
+      preferSameOutfit: true,
+    );
+
+    final reference = container
+        .read(generationParamsNotifierProvider)
+        .preciseReferences
+        .single;
+    final decoded = img.decodeImage(reference.image);
+
+    expect(
+      NAIApiUtils.isKnownNormalizedPreciseReferencePng(
+        reference.image,
+        mode: PreciseReferenceImageMode.aspectBucket,
+      ),
+      isTrue,
+    );
+    expect('${decoded!.width}x${decoded.height}', '1408x704');
+    expect(reference.strength, 3.5);
+    expect(reference.preferSameOutfit, isTrue);
+  });
 
   group('updateModel default follow-up', () {
     test('should adopt the new model defaults when untouched', () async {

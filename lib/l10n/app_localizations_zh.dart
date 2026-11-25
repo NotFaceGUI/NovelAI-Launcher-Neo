@@ -8503,7 +8503,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get preciseRef_fidelity => '保真度';
 
   @override
-  String get preciseRef_v4Only => '此功能仅 V4.5 模型支持';
+  String get preciseRef_v4Only => '此功能仅 V4.5 / V5 模型支持';
 
   @override
   String get preciseRef_typeCharacter => '角色';
@@ -8513,6 +8513,21 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get preciseRef_typeCharacterAndStyle => '角色+风格';
+
+  @override
+  String get preciseRef_typeOutfit => '服装';
+
+  @override
+  String get preciseRef_preferSameOutfit => '沿用参考服装';
+
+  @override
+  String get preciseRef_inpaintingNotSupported => 'V5 局部重绘不支持精准参考，参考图将被忽略。';
+
+  @override
+  String get preciseRef_outfitUnsupported => '当前模型不支持服装参考，服装参考将被跳过。';
+
+  @override
+  String get preciseRef_limitReached => '最多添加 16 个精准参考';
 
   @override
   String get preciseRef_costHint => '使用精准参考会消耗额外点数';
@@ -24092,7 +24107,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get preciseRef_fidelity => '保真度';
 
   @override
-  String get preciseRef_v4Only => '此功能僅 V4.5 模型支援';
+  String get preciseRef_v4Only => '此功能僅 V4.5 / V5 模型支援';
 
   @override
   String get preciseRef_typeCharacter => '角色';
@@ -24102,6 +24117,21 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get preciseRef_typeCharacterAndStyle => '角色+風格';
+
+  @override
+  String get preciseRef_typeOutfit => '服裝';
+
+  @override
+  String get preciseRef_preferSameOutfit => '沿用參考服裝';
+
+  @override
+  String get preciseRef_inpaintingNotSupported => 'V5 局部重繪不支援精準參考，參考圖將被忽略。';
+
+  @override
+  String get preciseRef_outfitUnsupported => '目前模型不支援服裝參考，服裝參考將被跳過。';
+
+  @override
+  String get preciseRef_limitReached => '最多新增 16 個精準參考';
 
   @override
   String get preciseRef_costHint => '使用精準參考會消耗額外點數';

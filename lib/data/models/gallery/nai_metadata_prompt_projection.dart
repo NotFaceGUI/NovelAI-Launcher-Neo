@@ -55,19 +55,20 @@ class NaiMetadataPromptProjection {
         final image = Uint8List.fromList(
           base64Decode(metadata.preciseReferenceImages[i]),
         );
-        final type = i < metadata.preciseReferenceTypes.length
-            ? _parsePreciseRefType(metadata.preciseReferenceTypes[i])
-            : PreciseRefType.character;
+        final parsed = i < metadata.preciseReferenceTypes.length
+            ? PreciseRefType.parseApi(metadata.preciseReferenceTypes[i])
+            : (type: PreciseRefType.character, preferSameOutfit: false);
         results.add(
           PreciseReference(
             image: image,
-            type: type,
+            type: parsed.type,
             strength: i < metadata.preciseReferenceStrengths.length
                 ? metadata.preciseReferenceStrengths[i]
                 : 1.0,
             fidelity: i < metadata.preciseReferenceFidelities.length
                 ? metadata.preciseReferenceFidelities[i]
                 : 1.0,
+            preferSameOutfit: parsed.preferSameOutfit,
           ),
         );
       } catch (error) {
@@ -203,16 +204,6 @@ class NaiMetadataPromptProjection {
         .where((word) => word.isNotEmpty)
         .map((word) => '${word[0].toUpperCase()}${word.substring(1)}')
         .join(' ');
-  }
-
-  static PreciseRefType _parsePreciseRefType(String? value) {
-    return switch (value?.trim().toLowerCase()) {
-      'style' => PreciseRefType.style,
-      'character&style' ||
-      'character_and_style' ||
-      'character and style' => PreciseRefType.characterAndStyle,
-      _ => PreciseRefType.character,
-    };
   }
 
   static List<String> _splitPromptSegments(String text) =>

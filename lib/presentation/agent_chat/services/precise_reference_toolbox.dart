@@ -100,8 +100,9 @@ class PreciseReferenceToolbox {
           'type': 'string',
           'enum': PreciseRefType.values.map((value) => value.name).toList(),
         },
-        'strength': {'type': 'number'},
-        'fidelity': {'type': 'number'},
+        'strength': {'type': 'number', 'minimum': 0, 'maximum': 5},
+        'fidelity': {'type': 'number', 'minimum': 0, 'maximum': 1},
+        'prefer_same_outfit': {'type': 'boolean'},
       },
       required: const ['resource_ref', 'name'],
     ),
@@ -127,6 +128,7 @@ class PreciseReferenceToolbox {
                   ),
             strength: (params['strength'] as num?)?.toDouble() ?? 1,
             fidelity: (params['fidelity'] as num?)?.toDouble() ?? 1,
+            preferSameOutfit: params['prefer_same_outfit'] as bool? ?? false,
           );
       return agentToolJsonResult({'ok': true, 'entry': _entryJson(entry)});
     },
@@ -144,8 +146,9 @@ class PreciseReferenceToolbox {
           'type': 'string',
           'enum': PreciseRefType.values.map((value) => value.name).toList(),
         },
-        'strength': {'type': 'number'},
-        'fidelity': {'type': 'number'},
+        'strength': {'type': 'number', 'minimum': 0, 'maximum': 5},
+        'fidelity': {'type': 'number', 'minimum': 0, 'maximum': 1},
+        'prefer_same_outfit': {'type': 'boolean'},
         'favorite': {'type': 'boolean'},
       },
       required: const ['entry_id'],
@@ -172,6 +175,7 @@ class PreciseReferenceToolbox {
               ),
         strength: (params['strength'] as num?)?.toDouble(),
         fidelity: (params['fidelity'] as num?)?.toDouble(),
+        preferSameOutfit: params['prefer_same_outfit'] as bool?,
       );
       if (updated == null) {
         return agentToolError('write_failed', 'Update failed.');
@@ -211,6 +215,7 @@ class PreciseReferenceToolbox {
             type: entry.type,
             strength: entry.strength,
             fidelity: entry.fidelity,
+            preferSameOutfit: entry.preferSameOutfit,
           );
       await _ref
           .read(preciseRefLibraryNotifierProvider.notifier)
@@ -284,6 +289,7 @@ Map<String, dynamic> _entryJson(PreciseRefLibraryEntry entry) => {
   ),
   'name': entry.name,
   'type': entry.type.name,
+  'prefer_same_outfit': entry.preferSameOutfit,
   'strength': entry.strength,
   'fidelity': entry.fidelity,
   'favorite': entry.isFavorite,

@@ -1,3 +1,4 @@
+import '../enums/precise_reference_image_mode.dart';
 import 'api_constants.dart';
 
 /// 请求体使用的提示词结构。
@@ -65,6 +66,12 @@ class ModelCapabilities {
     this.supportsVibeTransfer = false,
     this.supportsEncodedVibeTransfer = false,
     this.supportsPreciseReference = false,
+    this.supportsPreciseReferenceInpainting = false,
+    this.supportsPreciseReferenceFidelity = false,
+    this.supportsOutfitReference = false,
+    this.preciseReferenceStrengthMax = 1.0,
+    this.preciseReferenceImageMode = PreciseReferenceImageMode.none,
+    this.maxPreciseReferences = 16,
     this.hasInpaintingVariant = true,
     this.supportsImg2ImgInpainting = false,
     this.supportsTransparentBackground = false,
@@ -126,6 +133,24 @@ class ModelCapabilities {
   /// 需要先调用编码接口，并支持缓存编码、强度标准化及相应 Anlas 费用。
   final bool supportsEncodedVibeTransfer;
   final bool supportsPreciseReference;
+
+  /// 精准参考是否可用于局部重绘（infill）。V5 明确不支持。
+  final bool supportsPreciseReferenceInpainting;
+
+  /// 是否保留 Fidelity 滑杆。V5 已移除，请求固定按 1.0 处理。
+  final bool supportsPreciseReferenceFidelity;
+
+  /// 是否支持 Outfit Reference（V5 新增）。
+  final bool supportsOutfitReference;
+
+  /// 精准参考强度上限。V4.5 为 1，V5 为 5。
+  final double preciseReferenceStrengthMax;
+
+  /// 精准参考图进入请求前的规范化方式。
+  final PreciseReferenceImageMode preciseReferenceImageMode;
+
+  /// 单次请求最多可携带的精准参考数量（官网客户端上限 16）。
+  final int maxPreciseReferences;
 
   /// 是否存在独立的 inpainting 权重。V5 没有，infill 直接用基础模型。
   final bool hasInpaintingVariant;
@@ -336,6 +361,9 @@ class ModelCapabilityRegistry {
     supportsVibeTransfer: true,
     supportsEncodedVibeTransfer: true,
     supportsPreciseReference: true,
+    supportsPreciseReferenceInpainting: true,
+    supportsPreciseReferenceFidelity: true,
+    preciseReferenceImageMode: PreciseReferenceImageMode.directorCanvas,
     supportsImg2ImgInpainting: true,
     supportsEnhancePromptAdd: true,
     supportsTextRendering: true,
@@ -358,6 +386,9 @@ class ModelCapabilityRegistry {
     supportsVibeTransfer: true,
     supportsEncodedVibeTransfer: true,
     supportsPreciseReference: true,
+    supportsPreciseReferenceInpainting: true,
+    supportsPreciseReferenceFidelity: true,
+    preciseReferenceImageMode: PreciseReferenceImageMode.directorCanvas,
     supportsImg2ImgInpainting: true,
     supportsEnhancePromptAdd: true,
     supportsTextRendering: true,
@@ -382,6 +413,10 @@ class ModelCapabilityRegistry {
     randomPromptProfile: RandomPromptProfile.characterPrompts,
     maxCharacters: maximumCharacterCount,
     supportsCharacterInteraction: true,
+    supportsPreciseReference: true,
+    supportsOutfitReference: true,
+    preciseReferenceStrengthMax: 5.0,
+    preciseReferenceImageMode: PreciseReferenceImageMode.aspectBucket,
     supportsImg2ImgInpainting: true,
     supportsTransparentBackground: true,
     supportsMaxEnhance: true,
@@ -410,6 +445,10 @@ class ModelCapabilityRegistry {
     randomPromptProfile: RandomPromptProfile.characterPrompts,
     maxCharacters: maximumCharacterCount,
     supportsCharacterInteraction: true,
+    supportsPreciseReference: true,
+    supportsOutfitReference: true,
+    preciseReferenceStrengthMax: 5.0,
+    preciseReferenceImageMode: PreciseReferenceImageMode.aspectBucket,
     supportsImg2ImgInpainting: true,
     supportsTransparentBackground: true,
     supportsMaxEnhance: true,
@@ -442,6 +481,10 @@ class ModelCapabilityRegistry {
     randomPromptProfile: RandomPromptProfile.characterPrompts,
     maxCharacters: maximumCharacterCount,
     supportsCharacterInteraction: true,
+    supportsPreciseReference: true,
+    supportsOutfitReference: true,
+    preciseReferenceStrengthMax: 5.0,
+    preciseReferenceImageMode: PreciseReferenceImageMode.aspectBucket,
     supportsImg2ImgInpainting: true,
     supportsTransparentBackground: true,
     supportsMaxEnhance: true,

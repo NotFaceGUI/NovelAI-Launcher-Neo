@@ -48,6 +48,9 @@ class PreciseRefLibraryEntry with _$PreciseRefLibraryEntry {
 
     /// 创建时间
     @HiveField(9) required DateTime createdAt,
+
+    /// 是否沿用参考角色的服装（V5 的 Character / CharacterAndStyle）。
+    @HiveField(10, defaultValue: false) @Default(false) bool preferSameOutfit,
   }) = _PreciseRefLibraryEntry;
 
   /// 创建新条目（自动生成 id 与创建时间）
@@ -58,6 +61,7 @@ class PreciseRefLibraryEntry with _$PreciseRefLibraryEntry {
     PreciseRefType type = PreciseRefType.characterAndStyle,
     double strength = 1.0,
     double fidelity = 1.0,
+    bool preferSameOutfit = false,
     DateTime? createdAt,
   }) {
     final resolvedId = id ?? const Uuid().v4();
@@ -71,6 +75,7 @@ class PreciseRefLibraryEntry with _$PreciseRefLibraryEntry {
       typeIndex: type.index,
       strength: strength,
       fidelity: fidelity,
+      preferSameOutfit: preferSameOutfit && type.canPreferSameOutfit,
       createdAt: createdAt ?? DateTime.now(),
     );
   }
@@ -82,6 +87,10 @@ class PreciseRefLibraryEntry with _$PreciseRefLibraryEntry {
     }
     return PreciseRefType.values[typeIndex];
   }
+
+  /// 官方 `director_reference_descriptions` 使用的类型串。
+  String get preciseApiType =>
+      type.toApiString(preferSameOutfit: preferSameOutfit);
 
   /// 记录一次使用
   PreciseRefLibraryEntry recordUsage() {

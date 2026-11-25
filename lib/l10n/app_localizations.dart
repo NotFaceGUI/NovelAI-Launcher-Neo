@@ -15678,7 +15678,7 @@ abstract class AppLocalizations {
   /// No description provided for @preciseRef_v4Only.
   ///
   /// In en, this message translates to:
-  /// **'This feature is only available on V4.5 models'**
+  /// **'This feature is available on V4.5 / V5 models'**
   String get preciseRef_v4Only;
 
   /// No description provided for @preciseRef_typeCharacter.
@@ -15698,6 +15698,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Character + Style'**
   String get preciseRef_typeCharacterAndStyle;
+
+  /// No description provided for @preciseRef_typeOutfit.
+  ///
+  /// In en, this message translates to:
+  /// **'Outfit'**
+  String get preciseRef_typeOutfit;
+
+  /// No description provided for @preciseRef_preferSameOutfit.
+  ///
+  /// In en, this message translates to:
+  /// **'Prefer same outfit'**
+  String get preciseRef_preferSameOutfit;
+
+  /// No description provided for @preciseRef_inpaintingNotSupported.
+  ///
+  /// In en, this message translates to:
+  /// **'V5 inpainting doesn\'t support Precise Reference; references will be ignored.'**
+  String get preciseRef_inpaintingNotSupported;
+
+  /// No description provided for @preciseRef_outfitUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'This model doesn\'t support Outfit Reference; outfit references will be skipped.'**
+  String get preciseRef_outfitUnsupported;
+
+  /// No description provided for @preciseRef_limitReached.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to 16 precise references'**
+  String get preciseRef_limitReached;
 
   /// No description provided for @preciseRef_costHint.
   ///

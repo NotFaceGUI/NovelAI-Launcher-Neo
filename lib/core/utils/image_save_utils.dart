@@ -13,7 +13,6 @@ import '../../data/services/image_metadata_service.dart';
 import '../../data/services/metadata/unified_metadata_parser.dart';
 import '../constants/api_constants.dart';
 import '../enums/model_mode.dart';
-import '../enums/precise_ref_type.dart';
 import 'app_logger.dart';
 import 'prompt_semantics_utils.dart';
 
@@ -167,8 +166,7 @@ class ImageSaveUtils {
     if (params.hasPreciseReferences) {
       final preciseReferences = params.enabledPreciseReferences;
       commentJson['use_precise_ref'] = true;
-      commentJson['precise_ref_type'] = preciseReferences.first.type
-          .toApiString();
+      commentJson['precise_ref_type'] = preciseReferences.first.preciseApiType;
       // 注意：Precise Reference 的图像数据不直接存入元数据，
       // 因为可能很大。这里只记录配置信息
     }

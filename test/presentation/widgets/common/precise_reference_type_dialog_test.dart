@@ -32,6 +32,7 @@ void main() {
     expect(find.text('Character'), findsOneWidget);
     expect(find.text('Style'), findsOneWidget);
     expect(find.text('Character + Style'), findsOneWidget);
+    expect(find.text('Outfit'), findsOneWidget);
 
     await tester.tap(
       find.byKey(const ValueKey('precise-reference-type-characterAndStyle')),
@@ -39,6 +40,39 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(selected, PreciseRefType.characterAndStyle);
+  });
+
+  testWidgets('hides outfit when the model does not support it', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () async {
+                await PreciseReferenceTypeDialog.show(
+                  context,
+                  supportsOutfit: false,
+                );
+              },
+              child: const Text('Open'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Character'), findsOneWidget);
+    expect(find.text('Style'), findsOneWidget);
+    expect(find.text('Character + Style'), findsOneWidget);
+    expect(find.text('Outfit'), findsNothing);
   });
 
   testWidgets(

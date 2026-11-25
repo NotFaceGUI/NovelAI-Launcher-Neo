@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import '../../data/models/image/image_params.dart';
 import '../constants/model_capabilities.dart';
+import '../enums/precise_ref_type.dart';
 
 /// Anlas 消耗计算器
 ///
@@ -31,9 +32,30 @@ class AnlasCalculator {
   static const int _vibeCost = 2;
   static const int _preciseReferenceCost = 5;
 
+  /// References that will actually be sent for this request.
+  ///
+  /// V5 ignores precise references during infill, and models without outfit
+  /// support skip outfit references, so they must not be billed.
+  static List<PreciseReference> _billablePreciseReferences(ImageParams params) {
+    final capabilities = params.capabilities;
+    if (!capabilities.supportsPreciseReference) {
+      return const [];
+    }
+    if (params.action == ImageGenerationAction.infill &&
+        !capabilities.supportsPreciseReferenceInpainting) {
+      return const [];
+    }
+    return params.enabledPreciseReferences
+        .where(
+          (reference) =>
+              capabilities.supportsOutfitReference ||
+              reference.type != PreciseRefType.outfit,
+        )
+        .toList(growable: false);
+  }
+
   static bool _usesPreciseReferences(ImageParams params) {
-    return params.capabilities.supportsPreciseReference &&
-        params.hasPreciseReferences;
+    return _billablePreciseReferences(params).isNotEmpty;
   }
 
   static bool usesVibeReferences(ImageParams params) {
@@ -44,10 +66,7 @@ class AnlasCalculator {
   }
 
   static int resolvePreciseReferenceExtraCost(ImageParams params) {
-    if (!_usesPreciseReferences(params)) {
-      return 0;
-    }
-    return params.preciseReferenceCount * _preciseReferenceCost;
+    return _billablePreciseReferences(params).length * _preciseReferenceCost;
   }
 
   /// 尚未编码的启用 Vibe 每个只在生成前收取一次编码费。

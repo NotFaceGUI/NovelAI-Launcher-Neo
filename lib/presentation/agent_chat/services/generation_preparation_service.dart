@@ -154,9 +154,7 @@ class GenerationPreparationService {
 
     final requestedSteps = args['steps'];
     if (requestedSteps != null &&
-        (requestedSteps is! int ||
-            requestedSteps < 1 ||
-            requestedSteps > 50)) {
+        (requestedSteps is! int || requestedSteps < 1 || requestedSteps > 50)) {
       return agentToolError(
         'invalid_steps',
         'Parameter "steps" must be between 1 and 50.',
@@ -173,9 +171,7 @@ class GenerationPreparationService {
     }
     final requestedScale = args['scale'];
     if (requestedScale != null &&
-        (requestedScale is! num ||
-            requestedScale < 0 ||
-            requestedScale > 10)) {
+        (requestedScale is! num || requestedScale < 0 || requestedScale > 10)) {
       return agentToolError(
         'invalid_scale',
         'Parameter "scale" must be between 0 and 10.',
@@ -362,6 +358,7 @@ class GenerationPreparationService {
             type: entry.type,
             strength: entry.strength,
             fidelity: entry.fidelity,
+            preferSameOutfit: entry.preferSameOutfit,
           ),
         );
       } on FormatException catch (error) {

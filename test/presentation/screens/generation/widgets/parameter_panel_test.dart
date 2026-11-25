@@ -499,7 +499,9 @@ void main() {
   });
 
   group('PreciseReferencePanel', () {
-    testWidgets('数值输入不限制参考强度和保真度', (tester) async {
+    testWidgets('V4.5 clamps precise strength and fidelity to 0-1', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
@@ -547,15 +549,13 @@ void main() {
       final sliders = tester.widgetList<Slider>(find.byType(Slider)).toList();
 
       expect(fields, hasLength(2));
-      expect(fields[0].value, 3.5);
-      expect(fields[0].min, isNull);
-      expect(fields[0].max, isNull);
-      expect(fields[1].value, -2.25);
-      expect(fields[1].min, isNull);
-      expect(fields[1].max, isNull);
+      expect(fields[0].value, 1.0);
+      expect(fields[1].value, 0.0);
       expect(sliders, hasLength(2));
       expect(sliders[0].value, 1.0);
       expect(sliders[1].value, 0.0);
+      expect(sliders[0].max, 1.0);
+      expect(sliders[1].max, 1.0);
       expect(sliders[0].divisions, 20);
       expect(sliders[1].divisions, 20);
 
@@ -569,7 +569,82 @@ void main() {
             .preciseReferences
             .single
             .strength,
-        4.25,
+        1.0,
+      );
+    });
+
+    testWidgets('V5 exposes 0-5 strength and hides fidelity', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            localStorageServiceProvider.overrideWith(
+              (ref) => _TestLocalStorageService(),
+            ),
+            vibeLibraryStorageServiceProvider.overrideWithValue(
+              _TestVibeLibraryStorageService(),
+            ),
+          ],
+          child: const MaterialApp(
+            locale: Locale('en'),
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: SizedBox(width: 720, child: PreciseReferencePanel()),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(PreciseReferencePanel)),
+      );
+      container
+          .read(generationParamsNotifierProvider.notifier)
+          .updateModel(ImageModels.animeDiffusionV5Full);
+      container
+          .read(generationParamsNotifierProvider.notifier)
+          .addPreciseReference(
+            _validPngBytes(width: 4, height: 4),
+            type: PreciseRefType.character,
+            strength: 3.5,
+            fidelity: 0.4,
+            isNormalizedPng: true,
+          );
+      await tester.pump();
+
+      await tester.tap(find.text('Precise Reference'));
+      await tester.pumpAndSettle();
+
+      final fields = tester
+          .widgetList<EditableDoubleField>(find.byType(EditableDoubleField))
+          .toList();
+      final sliders = tester.widgetList<Slider>(find.byType(Slider)).toList();
+
+      expect(fields, hasLength(1));
+      expect(fields.single.value, 3.5);
+      expect(sliders, hasLength(1));
+      expect(sliders.single.value, 3.5);
+      expect(sliders.single.max, 5.0);
+      expect(sliders.single.divisions, 100);
+      expect(
+        find.byKey(const ValueKey('precise-reference-prefer-outfit-0')),
+        findsOneWidget,
+      );
+
+      await tester.enterText(find.byType(TextField).at(0), '6');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      expect(
+        container
+            .read(generationParamsNotifierProvider)
+            .preciseReferences
+            .single
+            .strength,
+        5.0,
       );
     });
 

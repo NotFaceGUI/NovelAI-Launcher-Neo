@@ -338,7 +338,8 @@ class NAIImageGenerationApiService {
         'ImgGen',
       );
     }
-    final preciseReferences = effectiveParams.isV45Model
+    final preciseReferences =
+        effectiveParams.capabilities.supportsPreciseReference
         ? effectiveParams.enabledPreciseReferences
         : <PreciseReference>[];
     final buildResult =

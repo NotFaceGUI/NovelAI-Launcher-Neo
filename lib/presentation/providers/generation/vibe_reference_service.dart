@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 
 import '../../../core/constants/model_capabilities.dart';
+import '../../../core/enums/precise_reference_image_mode.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../core/utils/nai_api_utils.dart';
 import '../../../core/utils/vibe_performance_diagnostics.dart';
@@ -464,11 +465,14 @@ final class VibeReferenceService {
   }
 
   Future<PreciseReferenceNormalizationResult> normalizePrecisePng(
-    Uint8List image,
-  ) async {
+    Uint8List image, {
+    required String model,
+  }) async {
     try {
-      final normalized = await NAIApiUtils.ensurePngFormatAsync(image);
-      NAIApiUtils.markNormalizedPreciseReferencePng(normalized);
+      final mode = ModelCapabilityRegistry.of(model).preciseReferenceImageMode;
+      final normalized = mode == PreciseReferenceImageMode.aspectBucket
+          ? await NAIApiUtils.ensureV5BucketedPngAsync(image)
+          : await NAIApiUtils.ensurePngFormatAsync(image);
       return PreciseReferenceNormalizationResult.success(normalized);
     } catch (error, stackTrace) {
       AppLogger.e(

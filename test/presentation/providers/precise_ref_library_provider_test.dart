@@ -42,6 +42,7 @@ class _ConcurrencyTrackingStorage extends PreciseRefLibraryStorageService {
     PreciseRefType type = PreciseRefType.characterAndStyle,
     double strength = 1.0,
     double fidelity = 1.0,
+    bool preferSameOutfit = false,
   }) async {
     activeImports++;
     if (activeImports > maxActiveImports) {

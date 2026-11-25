@@ -15,12 +15,14 @@ class PreciseRefEntryEditResult {
     required this.type,
     required this.strength,
     required this.fidelity,
+    required this.preferSameOutfit,
   });
 
   final String name;
   final PreciseRefType type;
   final double strength;
   final double fidelity;
+  final bool preferSameOutfit;
 }
 
 /// 精准参考库条目编辑对话框
@@ -71,6 +73,7 @@ class _PreciseRefEntryEditDialogState extends State<PreciseRefEntryEditDialog> {
   late PreciseRefType _type;
   late double _strength;
   late double _fidelity;
+  late bool _preferSameOutfit;
 
   @override
   void initState() {
@@ -79,6 +82,7 @@ class _PreciseRefEntryEditDialogState extends State<PreciseRefEntryEditDialog> {
     _type = widget.entry.type;
     _strength = widget.entry.strength;
     _fidelity = widget.entry.fidelity;
+    _preferSameOutfit = widget.entry.preferSameOutfit;
   }
 
   @override
@@ -96,6 +100,7 @@ class _PreciseRefEntryEditDialogState extends State<PreciseRefEntryEditDialog> {
         type: _type,
         strength: _strength,
         fidelity: _fidelity,
+        preferSameOutfit: _preferSameOutfit,
       ),
     );
   }
@@ -106,6 +111,7 @@ class _PreciseRefEntryEditDialogState extends State<PreciseRefEntryEditDialog> {
       character: l10n.preciseRef_typeCharacter,
       style: l10n.preciseRef_typeStyle,
       characterAndStyle: l10n.preciseRef_typeCharacterAndStyle,
+      outfit: l10n.preciseRef_typeOutfit,
     );
   }
 
@@ -170,7 +176,14 @@ class _PreciseRefEntryEditDialogState extends State<PreciseRefEntryEditDialog> {
                       ),
                   ],
                   onChanged: (value) {
-                    if (value != null) setState(() => _type = value);
+                    if (value != null) {
+                      setState(() {
+                        _type = value;
+                        if (!_type.canPreferSameOutfit) {
+                          _preferSameOutfit = false;
+                        }
+                      });
+                    }
                   },
                 );
               }
@@ -189,15 +202,40 @@ class _PreciseRefEntryEditDialogState extends State<PreciseRefEntryEditDialog> {
                 ],
                 selected: {_type},
                 onSelectionChanged: (selection) {
-                  setState(() => _type = selection.first);
+                  setState(() {
+                    _type = selection.first;
+                    if (!_type.canPreferSameOutfit) {
+                      _preferSameOutfit = false;
+                    }
+                  });
                 },
               );
             },
           ),
+          if (_type.canPreferSameOutfit) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    l10n.preciseRef_preferSameOutfit,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+                Switch(
+                  key: const Key('precise-ref-edit-prefer-outfit'),
+                  value: _preferSameOutfit,
+                  onChanged: (value) =>
+                      setState(() => _preferSameOutfit = value),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 16),
           _buildSliderRow(
             label: l10n.preciseRef_strength,
             value: _strength,
+            max: 5,
             fieldKey: const Key('precise-ref-edit-strength-field'),
             onChanged: (value) => setState(() => _strength = value),
           ),
@@ -250,23 +288,26 @@ class _PreciseRefEntryEditDialogState extends State<PreciseRefEntryEditDialog> {
     required String label,
     required double value,
     required Key fieldKey,
+    double max = 1.0,
     required ValueChanged<double> onChanged,
   }) {
     final theme = Theme.of(context);
+    final effectiveValue = value.clamp(0.0, max).toDouble();
     return LayoutBuilder(
       builder: (context, constraints) {
         final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
         final field = EditableDoubleField(
           key: fieldKey,
-          value: value,
+          value: effectiveValue,
           decimals: 2,
           width: 64,
-          onChanged: onChanged,
+          onChanged: (next) => onChanged(next.clamp(0.0, max)),
         );
         final slider = Slider(
-          value: value.clamp(0.0, 1.0),
-          divisions: 20,
-          onChanged: onChanged,
+          value: effectiveValue,
+          max: max,
+          divisions: (max * 20).round(),
+          onChanged: (next) => onChanged(next.clamp(0.0, max)),
         );
         if (constraints.maxWidth < 340 || textScale > 1.5) {
           return Column(

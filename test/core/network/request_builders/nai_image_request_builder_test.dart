@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:nai_launcher/core/constants/api_constants.dart';
 import 'package:nai_launcher/core/enums/model_mode.dart';
+import 'package:nai_launcher/core/enums/precise_reference_image_mode.dart';
 import 'package:nai_launcher/core/enums/precise_ref_type.dart';
 import 'package:nai_launcher/core/network/request_builders/nai_image_request_builder.dart';
 import 'package:nai_launcher/core/utils/nai_api_utils.dart';
@@ -893,15 +894,53 @@ void main() {
       },
     );
 
-    test('should forward uncapped precise strength and fidelity', () async {
+    test(
+      'clamps V4.5 precise strength and fidelity to official ranges',
+      () async {
+        final params = ImageParams(
+          model: 'nai-diffusion-4-5-full',
+          preciseReferences: [
+            PreciseReference(
+              image: _validPngBytes(),
+              type: PreciseRefType.character,
+              strength: 2.5,
+              fidelity: -1.25,
+            ),
+          ],
+        );
+
+        final result = await NAIImageRequestBuilder(
+          params: params,
+          encodeVibe: _fakeEncodeVibe,
+        ).build(sampler: 'k_euler');
+
+        expect(
+          result.requestParameters['director_reference_strength_values'],
+          equals([1.0]),
+        );
+        expect(
+          result
+              .requestParameters['director_reference_secondary_strength_values'],
+          equals([1.0]),
+        );
+      },
+    );
+
+    test('V5 forwards strength up to five and forces fidelity to one', () async {
+      final image = _validPngBytes();
+      NAIApiUtils.markNormalizedPreciseReferencePng(
+        image,
+        mode: PreciseReferenceImageMode.aspectBucket,
+      );
       final params = ImageParams(
-        model: 'nai-diffusion-4-5-full',
+        model: 'nai-diffusion-5-full',
         preciseReferences: [
           PreciseReference(
-            image: _validPngBytes(),
+            image: image,
             type: PreciseRefType.character,
-            strength: 2.5,
-            fidelity: -1.25,
+            strength: 9,
+            fidelity: 0.3,
+            preferSameOutfit: true,
           ),
         ],
       );
@@ -909,18 +948,117 @@ void main() {
       final result = await NAIImageRequestBuilder(
         params: params,
         encodeVibe: _fakeEncodeVibe,
-      ).build(sampler: 'k_euler');
+      ).build(sampler: 'k_euler_ancestral');
 
       expect(
         result.requestParameters['director_reference_strength_values'],
-        equals([2.5]),
+        equals([5.0]),
       );
       expect(
         result
             .requestParameters['director_reference_secondary_strength_values'],
-        equals([2.25]),
+        equals([0.0]),
+      );
+      final descriptions =
+          result.requestParameters['director_reference_descriptions'] as List;
+      expect(
+        ((descriptions.single as Map)['caption'] as Map)['base_caption'],
+        'character_mainoutfit',
       );
     });
+
+    test('V5 emits costume and the any-outfit variant', () async {
+      final outfitImage = _validPngBytes();
+      final styleImage = _validPngBytes(width: 2, height: 1);
+      for (final image in [outfitImage, styleImage]) {
+        NAIApiUtils.markNormalizedPreciseReferencePng(
+          image,
+          mode: PreciseReferenceImageMode.aspectBucket,
+        );
+      }
+      final params = ImageParams(
+        model: 'nai-diffusion-5-curated',
+        preciseReferences: [
+          PreciseReference(image: outfitImage, type: PreciseRefType.outfit),
+          PreciseReference(
+            image: styleImage,
+            type: PreciseRefType.characterAndStyle,
+            preferSameOutfit: true,
+          ),
+        ],
+      );
+
+      final result = await NAIImageRequestBuilder(
+        params: params,
+        encodeVibe: _fakeEncodeVibe,
+      ).build(sampler: 'k_euler_ancestral');
+
+      final descriptions =
+          result.requestParameters['director_reference_descriptions'] as List;
+      expect(
+        ((descriptions[0] as Map)['caption'] as Map)['base_caption'],
+        'costume',
+      );
+      expect(
+        ((descriptions[1] as Map)['caption'] as Map)['base_caption'],
+        'character&style_anyoutfit',
+      );
+    });
+
+    test('V5 skips precise references for infill', () async {
+      final params = ImageParams(
+        model: 'nai-diffusion-5-full',
+        action: ImageGenerationAction.infill,
+        preciseReferences: [
+          PreciseReference(
+            image: _validPngBytes(),
+            type: PreciseRefType.character,
+          ),
+        ],
+      );
+
+      final result = await NAIImageRequestBuilder(
+        params: params,
+        encodeVibe: _fakeEncodeVibe,
+      ).build(sampler: 'k_euler_ancestral');
+
+      expect(
+        result.requestParameters.containsKey('director_reference_images'),
+        isFalse,
+      );
+    });
+
+    test(
+      'V4.5 skips outfit references and maps prefer to the base type',
+      () async {
+        final outfitImage = _validPngBytes();
+        final preferImage = _validPngBytes(width: 2, height: 1);
+        final params = ImageParams(
+          model: 'nai-diffusion-4-5-full',
+          preciseReferences: [
+            PreciseReference(image: outfitImage, type: PreciseRefType.outfit),
+            PreciseReference(
+              image: preferImage,
+              type: PreciseRefType.character,
+              preferSameOutfit: true,
+            ),
+          ],
+        );
+
+        final result = await NAIImageRequestBuilder(
+          params: params,
+          encodeVibe: _fakeEncodeVibe,
+        ).build(sampler: 'k_euler');
+
+        final descriptions =
+            result.requestParameters['director_reference_descriptions'] as List;
+        expect(descriptions, hasLength(1));
+        expect(
+          ((descriptions.single as Map)['caption'] as Map)['base_caption'],
+          'character',
+        );
+      },
+    );
 
     test('should ignore precise references for non-v4.5 model', () async {
       final params = ImageParams(

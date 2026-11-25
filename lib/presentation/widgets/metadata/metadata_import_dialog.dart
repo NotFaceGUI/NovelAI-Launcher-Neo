@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/enums/precise_ref_type.dart';
+import '../../../../core/extensions/precise_ref_type_extensions.dart';
 import '../../../../core/utils/localization_extension.dart';
 import '../../../../data/models/gallery/nai_image_metadata.dart';
 import '../../../../data/models/metadata/metadata_import_options.dart';
@@ -651,10 +651,19 @@ class _MetadataImportDialogState extends State<MetadataImportDialog> {
             children: preciseReferences.asMap().entries.map((entry) {
               final index = entry.key;
               final reference = entry.value;
+              final typeLabel = reference.type.getDisplayName(
+                character: l10n.preciseRef_typeCharacter,
+                style: l10n.preciseRef_typeStyle,
+                characterAndStyle: l10n.preciseRef_typeCharacterAndStyle,
+                outfit: l10n.preciseRef_typeOutfit,
+              );
+              final detailLabel = reference.preferSameOutfit
+                  ? '$typeLabel (${l10n.preciseRef_preferSameOutfit})'
+                  : typeLabel;
               return _buildChildCheckboxTile(
                 title: l10n.metadataImport_preciseReferenceDetail(
                   index + 1,
-                  reference.type.toApiString(),
+                  detailLabel,
                   (reference.strength * 100).toStringAsFixed(0),
                   (reference.fidelity * 100).toStringAsFixed(0),
                 ),

@@ -397,6 +397,7 @@ class _PreciseRefLibraryScreenState
             type: entry.type,
             strength: entry.strength,
             fidelity: entry.fidelity,
+            preferSameOutfit: entry.preferSameOutfit,
           ),
     );
     unawaited(
@@ -450,6 +451,7 @@ class _PreciseRefLibraryScreenState
         type: entry.type,
         strength: entry.strength,
         fidelity: entry.fidelity,
+        preferSameOutfit: entry.preferSameOutfit,
       ),
       recordUsage: (id) async {
         await library.recordUsage(id);
@@ -541,6 +543,7 @@ class _PreciseRefLibraryScreenState
           type: result.type,
           strength: result.strength,
           fidelity: result.fidelity,
+          preferSameOutfit: result.preferSameOutfit,
         );
   }
 

@@ -52,6 +52,7 @@ abstract final class ReplicationTaskGenerationSnapshot {
         {
           'image': base64Encode(reference.image),
           'type': reference.type.name,
+          'preferSameOutfit': reference.preferSameOutfit,
           'strength': reference.strength,
           'fidelity': reference.fidelity,
           'enabled': reference.enabled,
@@ -150,6 +151,7 @@ abstract final class ReplicationTaskGenerationSnapshot {
       type: type,
       strength: (item['strength'] as num?)?.toDouble() ?? 1,
       fidelity: (item['fidelity'] as num?)?.toDouble() ?? 1,
+      preferSameOutfit: item['preferSameOutfit'] as bool? ?? false,
       enabled: item['enabled'] != false,
     );
   }

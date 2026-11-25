@@ -8631,7 +8631,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get preciseRef_fidelity => '忠実度';
 
   @override
-  String get preciseRef_v4Only => 'この機能は V4.5 モデルのみ対応しています';
+  String get preciseRef_v4Only => 'この機能は V4.5 / V5 モデルで利用できます';
 
   @override
   String get preciseRef_typeCharacter => 'キャラ参照';
@@ -8641,6 +8641,23 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get preciseRef_typeCharacterAndStyle => 'キャラ＆絵柄参照';
+
+  @override
+  String get preciseRef_typeOutfit => '衣装参照';
+
+  @override
+  String get preciseRef_preferSameOutfit => '衣装も参照する';
+
+  @override
+  String get preciseRef_inpaintingNotSupported =>
+      'V5のインペイントでは精密参照は使用できません。参照画像は無視されます。';
+
+  @override
+  String get preciseRef_outfitUnsupported =>
+      'このモデルは衣装参照に対応していないため、衣装参照はスキップされます。';
+
+  @override
+  String get preciseRef_limitReached => '精密参照は最大16個まで追加できます';
 
   @override
   String get preciseRef_costHint => '精密参照を使用すると追加の Anlas を消費します';

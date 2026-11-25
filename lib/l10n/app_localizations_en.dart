@@ -8842,7 +8842,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get preciseRef_v4Only =>
-      'This feature is only available on V4.5 models';
+      'This feature is available on V4.5 / V5 models';
 
   @override
   String get preciseRef_typeCharacter => 'Character';
@@ -8852,6 +8852,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get preciseRef_typeCharacterAndStyle => 'Character + Style';
+
+  @override
+  String get preciseRef_typeOutfit => 'Outfit';
+
+  @override
+  String get preciseRef_preferSameOutfit => 'Prefer same outfit';
+
+  @override
+  String get preciseRef_inpaintingNotSupported =>
+      'V5 inpainting doesn\'t support Precise Reference; references will be ignored.';
+
+  @override
+  String get preciseRef_outfitUnsupported =>
+      'This model doesn\'t support Outfit Reference; outfit references will be skipped.';
+
+  @override
+  String get preciseRef_limitReached => 'Up to 16 precise references';
 
   @override
   String get preciseRef_costHint =>

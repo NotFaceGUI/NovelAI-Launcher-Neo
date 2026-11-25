@@ -613,6 +613,48 @@ void main() {
       expect(AnlasCalculator.resolveVibeReferenceExtraCost(params), 0);
     });
 
+    test('charges V5 precise references per reference and per image', () {
+      final rawImage = Uint8List.fromList([1, 2, 3]);
+      final params = ImageParams(
+        model: ImageModels.animeDiffusionV5Full,
+        nSamples: 2,
+        preciseReferences: [
+          PreciseReference(image: rawImage, type: PreciseRefType.character),
+          PreciseReference(image: rawImage, type: PreciseRefType.outfit),
+        ],
+      );
+
+      expect(AnlasCalculator.resolvePreciseReferenceExtraCost(params), 10);
+      final total = AnlasCalculator.calculate(params);
+      expect(total, greaterThanOrEqualTo(20));
+    });
+
+    test('does not charge V5 precise references during infill', () {
+      final rawImage = Uint8List.fromList([1, 2, 3]);
+      final params = ImageParams(
+        model: ImageModels.animeDiffusionV5Full,
+        action: ImageGenerationAction.infill,
+        preciseReferences: [
+          PreciseReference(image: rawImage, type: PreciseRefType.character),
+        ],
+      );
+
+      expect(AnlasCalculator.resolvePreciseReferenceExtraCost(params), 0);
+    });
+
+    test('V4.5 bills only references the model can send', () {
+      final rawImage = Uint8List.fromList([1, 2, 3]);
+      final params = ImageParams(
+        model: ImageModels.animeDiffusionV45Full,
+        preciseReferences: [
+          PreciseReference(image: rawImage, type: PreciseRefType.outfit),
+          PreciseReference(image: rawImage, type: PreciseRefType.character),
+        ],
+      );
+
+      expect(AnlasCalculator.resolvePreciseReferenceExtraCost(params), 5);
+    });
+
     test('charges two Anlas for every Vibe after the fourth per request', () {
       final params = ImageParams(
         model: model,

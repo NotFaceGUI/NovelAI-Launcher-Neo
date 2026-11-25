@@ -104,6 +104,7 @@ class PreciseRefLibraryStorageService {
     PreciseRefType type = PreciseRefType.characterAndStyle,
     double strength = 1.0,
     double fidelity = 1.0,
+    bool preferSameOutfit = false,
   }) async {
     await init();
     final extension = detectImageExtension(bytes);
@@ -124,6 +125,7 @@ class PreciseRefLibraryStorageService {
       type: type,
       strength: strength,
       fidelity: fidelity,
+      preferSameOutfit: preferSameOutfit,
     );
 
     var metadataWritten = false;
@@ -168,6 +170,7 @@ class PreciseRefLibraryStorageService {
     required PreciseRefType type,
     required double strength,
     required double fidelity,
+    bool preferSameOutfit = false,
     required bool isFavorite,
     required int usedCount,
     required DateTime? lastUsedAt,
@@ -181,6 +184,7 @@ class PreciseRefLibraryStorageService {
       type: type,
       strength: strength,
       fidelity: fidelity,
+      preferSameOutfit: preferSameOutfit,
       isFavorite: isFavorite,
       usedCount: usedCount,
       lastUsedAt: lastUsedAt,
@@ -196,6 +200,7 @@ class PreciseRefLibraryStorageService {
     required PreciseRefType type,
     required double strength,
     required double fidelity,
+    bool preferSameOutfit = false,
     required bool isFavorite,
     required int usedCount,
     required DateTime? lastUsedAt,
@@ -220,6 +225,7 @@ class PreciseRefLibraryStorageService {
       type: type,
       strength: strength,
       fidelity: fidelity,
+      preferSameOutfit: preferSameOutfit,
       isFavorite: isFavorite,
       usedCount: usedCount,
       lastUsedAt: lastUsedAt,
@@ -234,6 +240,7 @@ class PreciseRefLibraryStorageService {
     PreciseRefType? type,
     double? strength,
     double? fidelity,
+    bool? preferSameOutfit,
     bool? isFavorite,
   }) async {
     await init();
@@ -241,13 +248,18 @@ class PreciseRefLibraryStorageService {
     if (entry == null) return null;
 
     final trimmedName = name?.trim();
+    final resolvedType = type ?? entry.type;
+    final resolvedPreferSameOutfit =
+        preferSameOutfit ??
+        (resolvedType.canPreferSameOutfit ? entry.preferSameOutfit : false);
     final updated = entry.copyWith(
       name: (trimmedName == null || trimmedName.isEmpty)
           ? entry.name
           : trimmedName,
-      typeIndex: type?.index ?? entry.typeIndex,
+      typeIndex: resolvedType.index,
       strength: strength ?? entry.strength,
       fidelity: fidelity ?? entry.fidelity,
+      preferSameOutfit: resolvedPreferSameOutfit,
       isFavorite: isFavorite ?? entry.isFavorite,
     );
     await _entriesBox!.put(id, updated);

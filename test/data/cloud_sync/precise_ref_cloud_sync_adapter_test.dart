@@ -54,6 +54,7 @@ void main() {
         type: PreciseRefType.character,
         strength: 0.7,
         fidelity: 0.8,
+        preferSameOutfit: true,
       );
       final adapter = PreciseRefCloudSyncAdapter(storage);
       final exported = (await adapter.exportRecords().toList()).single;
@@ -104,6 +105,7 @@ void main() {
       expect(restored.id, source.id);
       expect(restored.name, 'portable');
       expect(restored.type, PreciseRefType.character);
+      expect(restored.preferSameOutfit, isTrue);
       expect(await storage.readImageBytes(restored.id), remoteBytes);
       expect(await storage.getDisplayThumbnail(restored.id), isNotEmpty);
       expect(await storage.readImageBytes(copied.id), remoteBytes);

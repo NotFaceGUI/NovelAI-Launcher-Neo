@@ -25,6 +25,7 @@ class _FailingCommitStorage extends PreciseRefLibraryStorageService {
     required PreciseRefType type,
     required double strength,
     required double fidelity,
+    bool preferSameOutfit = false,
     required bool isFavorite,
     required int usedCount,
     required DateTime? lastUsedAt,
@@ -77,9 +78,10 @@ void main() {
     final source = await storage.importFromBytes(
       _pngBytes(),
       name: '参考图',
-      type: PreciseRefType.style,
+      type: PreciseRefType.character,
       strength: 0.65,
       fidelity: 0.35,
+      preferSameOutfit: true,
     );
     await storage.updateEntry(source.id, isFavorite: true);
     await storage.recordUsage(source.id);
@@ -91,9 +93,10 @@ void main() {
 
     expect(imported.id, isNot(source.id));
     expect(imported.name, source.name);
-    expect(imported.type, PreciseRefType.style);
+    expect(imported.type, PreciseRefType.character);
     expect(imported.strength, 0.65);
     expect(imported.fidelity, 0.35);
+    expect(imported.preferSameOutfit, isTrue);
     expect(imported.isFavorite, isTrue);
     expect(imported.usedCount, 1);
     expect(await File(imported.imagePath).readAsBytes(), _pngBytes());

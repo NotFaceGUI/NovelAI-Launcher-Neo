@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import '../../constants/api_constants.dart';
+import '../../enums/precise_reference_image_mode.dart';
 import '../../enums/precise_ref_type.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/character_center_resolver.dart';
@@ -519,36 +520,86 @@ class NAIImageRequestBuilder {
     if (_preciseReferences.isEmpty) {
       return;
     }
+    final capabilities = params.capabilities;
+    if (!capabilities.supportsPreciseReference) {
+      return;
+    }
+    if (params.action == ImageGenerationAction.infill &&
+        !capabilities.supportsPreciseReferenceInpainting) {
+      AppLogger.d(
+        'Precise Reference is not supported with infill for '
+            '${params.model}; skipping reference payload',
+        'ImgGen',
+      );
+      return;
+    }
 
-    final referenceImages = <String>[];
+    final usableReferences = <PreciseReference>[];
     for (final reference in _preciseReferences) {
+      if (reference.type == PreciseRefType.outfit &&
+          !capabilities.supportsOutfitReference) {
+        AppLogger.d(
+          'Skipping outfit reference unsupported by ${params.model}',
+          'ImgGen',
+        );
+        continue;
+      }
+      usableReferences.add(reference);
+    }
+    if (usableReferences.isEmpty) {
+      return;
+    }
+
+    final mode = capabilities.preciseReferenceImageMode;
+    final referenceImages = <String>[];
+    for (final reference in usableReferences) {
       final imageBytes =
-          NAIApiUtils.isKnownNormalizedPreciseReferencePng(reference.image)
+          NAIApiUtils.isKnownNormalizedPreciseReferencePng(
+            reference.image,
+            mode: mode,
+          )
           ? reference.image
+          : mode == PreciseReferenceImageMode.aspectBucket
+          ? await NAIApiUtils.ensureV5BucketedPngAsync(reference.image)
           : await NAIApiUtils.ensurePngFormatAsync(reference.image);
       referenceImages.add(base64Encode(imageBytes));
     }
 
     requestParameters['normalize_reference_strength_multiple'] = true;
     requestParameters['director_reference_images'] = referenceImages;
-    requestParameters['director_reference_descriptions'] = _preciseReferences
-        .map(
-          (r) => {
-            'caption': {
-              'base_caption': r.type.toApiString(),
-              'char_captions': [],
-            },
-            'legacy_uc': false,
+    requestParameters['director_reference_descriptions'] = usableReferences.map(
+      (reference) {
+        final preferSameOutfit =
+            capabilities.supportsOutfitReference &&
+            reference.preferSameOutfit &&
+            reference.type.canPreferSameOutfit;
+        return {
+          'caption': {
+            'base_caption': reference.type.toApiString(
+              preferSameOutfit: preferSameOutfit,
+            ),
+            'char_captions': [],
           },
+          'legacy_uc': false,
+        };
+      },
+    ).toList();
+    requestParameters['director_reference_information_extracted'] =
+        usableReferences.map((_) => 1).toList();
+    requestParameters['director_reference_strength_values'] = usableReferences
+        .map(
+          (reference) => reference.strength
+              .clamp(0.0, capabilities.preciseReferenceStrengthMax)
+              .toDouble(),
         )
         .toList();
-    requestParameters['director_reference_information_extracted'] =
-        _preciseReferences.map((_) => 1).toList();
-    requestParameters['director_reference_strength_values'] = _preciseReferences
-        .map((r) => r.strength)
-        .toList();
     requestParameters['director_reference_secondary_strength_values'] =
-        _preciseReferences.map((r) => 1.0 - r.fidelity).toList();
+        usableReferences.map((reference) {
+          final fidelity = capabilities.supportsPreciseReferenceFidelity
+              ? reference.fidelity.clamp(0.0, 1.0).toDouble()
+              : 1.0;
+          return 1.0 - fidelity;
+        }).toList();
   }
 
   Future<Uint8List> _normalizeRequestSourceImage(Uint8List sourceImage) async {

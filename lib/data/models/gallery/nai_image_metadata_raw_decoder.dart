@@ -3,7 +3,6 @@ import 'dart:convert';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/constants/model_capabilities.dart';
 import '../../../core/enums/model_mode.dart';
-import '../../../core/enums/precise_ref_type.dart';
 import '../../../core/utils/nai_prompt_parser.dart';
 import '../../../core/utils/novelai_auto_text.dart';
 import '../../../core/utils/portable_logger.dart';
@@ -810,7 +809,7 @@ class NaiImageMetadataRawDecoder {
       if (image is! String || image.isEmpty) continue;
 
       images.add(image);
-      types.add(_extractPreciseType(descriptions, i).toApiString());
+      types.add(_extractPreciseApiType(descriptions, i));
       referenceStrengths.add(i < strengths.length ? strengths[i] : 1.0);
       final secondary = i < secondaryStrengths.length
           ? secondaryStrengths[i]
@@ -826,32 +825,22 @@ class NaiImageMetadataRawDecoder {
     );
   }
 
-  static PreciseRefType _extractPreciseType(dynamic descriptions, int index) {
+  /// 保留官方原始类型串，确保 V5 的 costume / *_outfit 变体不丢失。
+  static String _extractPreciseApiType(dynamic descriptions, int index) {
     if (descriptions is! List || index >= descriptions.length) {
-      return PreciseRefType.character;
+      return 'character';
     }
     final description = descriptions[index];
     if (description is Map<String, dynamic>) {
       final caption = description['caption'];
       if (caption is Map<String, dynamic>) {
-        return _parsePreciseRefType(caption['base_caption'] as String?);
+        final value = caption['base_caption'];
+        if (value is String && value.trim().isNotEmpty) {
+          return value.trim().toLowerCase();
+        }
       }
     }
-    return PreciseRefType.character;
-  }
-
-  static PreciseRefType _parsePreciseRefType(String? value) {
-    switch (value?.trim().toLowerCase()) {
-      case 'style':
-        return PreciseRefType.style;
-      case 'character&style':
-      case 'character_and_style':
-      case 'character and style':
-        return PreciseRefType.characterAndStyle;
-      case 'character':
-      default:
-        return PreciseRefType.character;
-    }
+    return 'character';
   }
 
   static dynamic _firstPresent(Map<String, dynamic> data, List<String> keys) {

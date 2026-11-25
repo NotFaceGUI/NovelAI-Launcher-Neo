@@ -274,7 +274,15 @@ String buildAgentSystemPromptBody({required bool webAccessEnabled}) {
         'prompting (officially English + Japanese, Chinese usually '
         'works); multi-language text rendering via a "Text: ..." block '
         'at the very end of the prompt; whole comic-page layouts can be '
-        'described in natural language.',
+        'described in natural language; up to 22 distinct characters.',
+    '- Precise Reference: V4.5 and V5 support it; prefer library entries '
+        'and apply_precise_reference_entry instead of describing reference '
+        'images in the prompt. V4.5 types: character, style, '
+        'characterAndStyle; strength and fidelity are 0-1; it works with '
+        'inpainting. V5 adds outfit and prefer_same_outfit for character / '
+        'characterAndStyle; strength is 0-5; fidelity is gone; V5 '
+        'inpainting ignores precise references. Each reference costs 5 '
+        'Anlas per generated image. V5 has no Vibe Transfer.',
     '- The app can auto-append quality tags and the negative preset '
         '(quality_toggle / uc_preset settings); do not add quality or '
         'aesthetic tags manually unless the user asks. V4.5+ reference '

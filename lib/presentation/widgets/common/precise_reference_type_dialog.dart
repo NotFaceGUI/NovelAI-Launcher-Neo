@@ -7,17 +7,27 @@ import '../../adaptive/adaptive_presenter.dart';
 import '../../adaptive/content_sized_adaptive_form.dart';
 
 class PreciseReferenceTypeDialog extends StatelessWidget {
-  const PreciseReferenceTypeDialog({super.key, this.scrollController});
+  const PreciseReferenceTypeDialog({
+    super.key,
+    this.scrollController,
+    this.supportsOutfit = true,
+  });
 
   final ScrollController? scrollController;
+  final bool supportsOutfit;
 
-  static Future<PreciseRefType?> show(BuildContext context) {
+  static Future<PreciseRefType?> show(
+    BuildContext context, {
+    bool supportsOutfit = true,
+  }) {
     return AdaptivePresenter.showForm<PreciseRefType>(
       context: context,
       title: context.l10n.preciseRef_referenceType,
       dialogWidth: 420,
-      builder: (context, controller) =>
-          PreciseReferenceTypeDialog(scrollController: controller),
+      builder: (context, controller) => PreciseReferenceTypeDialog(
+        scrollController: controller,
+        supportsOutfit: supportsOutfit,
+      ),
     );
   }
 
@@ -26,21 +36,24 @@ class PreciseReferenceTypeDialog extends StatelessWidget {
     return ContentSizedAdaptiveForm(
       scrollController: scrollController,
       content: [
-        ...PreciseRefType.values.map((type) {
-          return ListTile(
-            key: ValueKey('precise-reference-type-${type.name}'),
-            leading: Icon(type.icon),
-            title: Text(
-              type.getDisplayName(
-                character: context.l10n.preciseRef_typeCharacter,
-                style: context.l10n.preciseRef_typeStyle,
-                characterAndStyle:
-                    context.l10n.preciseRef_typeCharacterAndStyle,
-              ),
-            ),
-            onTap: () => Navigator.of(context).pop(type),
-          );
-        }),
+        ...PreciseRefType.values
+            .where((type) => type != PreciseRefType.outfit || supportsOutfit)
+            .map((type) {
+              return ListTile(
+                key: ValueKey('precise-reference-type-${type.name}'),
+                leading: Icon(type.icon),
+                title: Text(
+                  type.getDisplayName(
+                    character: context.l10n.preciseRef_typeCharacter,
+                    style: context.l10n.preciseRef_typeStyle,
+                    characterAndStyle:
+                        context.l10n.preciseRef_typeCharacterAndStyle,
+                    outfit: context.l10n.preciseRef_typeOutfit,
+                  ),
+                ),
+                onTap: () => Navigator.of(context).pop(type),
+              );
+            }),
         Align(
           alignment: AlignmentDirectional.centerEnd,
           child: TextButton(

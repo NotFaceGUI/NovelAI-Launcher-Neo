@@ -8,12 +8,13 @@ void main() {
       PreciseRefType.style: ('style', 'preciseRef_typeStyle'),
       PreciseRefType.characterAndStyle: (
         'character&style',
-        'preciseRef_typeCharacterAndStyle'
+        'preciseRef_typeCharacterAndStyle',
       ),
+      PreciseRefType.outfit: ('costume', 'preciseRef_typeOutfit'),
     };
 
-    test('should have exactly three values', () {
-      expect(PreciseRefType.values, hasLength(3));
+    test('should have exactly four values', () {
+      expect(PreciseRefType.values, hasLength(4));
     });
 
     test('all values should be present', () {
@@ -28,6 +29,47 @@ void main() {
       }
     });
 
+    test('toApiString() should emit V5 outfit variants', () {
+      expect(
+        PreciseRefType.character.toApiString(preferSameOutfit: true),
+        'character_mainoutfit',
+      );
+      expect(
+        PreciseRefType.characterAndStyle.toApiString(preferSameOutfit: true),
+        'character&style_anyoutfit',
+      );
+      expect(
+        PreciseRefType.outfit.toApiString(preferSameOutfit: true),
+        'costume',
+      );
+      expect(PreciseRefType.style.toApiString(preferSameOutfit: true), 'style');
+    });
+
+    test('parseApi() should round-trip all official strings', () {
+      final cases = {
+        'character': (PreciseRefType.character, false),
+        'style': (PreciseRefType.style, false),
+        'character&style': (PreciseRefType.characterAndStyle, false),
+        'costume': (PreciseRefType.outfit, false),
+        'outfit': (PreciseRefType.outfit, false),
+        'character_mainoutfit': (PreciseRefType.character, true),
+        'character&style_anyoutfit': (PreciseRefType.characterAndStyle, true),
+      };
+      for (final entry in cases.entries) {
+        final parsed = PreciseRefType.parseApi(entry.key);
+        expect(parsed.type, entry.value.$1, reason: entry.key);
+        expect(parsed.preferSameOutfit, entry.value.$2, reason: entry.key);
+      }
+      expect(PreciseRefType.parseApi(null).type, PreciseRefType.character);
+    });
+
+    test('only character types can prefer the same outfit', () {
+      expect(PreciseRefType.character.canPreferSameOutfit, isTrue);
+      expect(PreciseRefType.characterAndStyle.canPreferSameOutfit, isTrue);
+      expect(PreciseRefType.style.canPreferSameOutfit, isFalse);
+      expect(PreciseRefType.outfit.canPreferSameOutfit, isFalse);
+    });
+
     test('displayNameKey should return correct values', () {
       for (final entry in expectedValues.entries) {
         expect(entry.key.displayNameKey, equals(entry.value.$2));
@@ -35,8 +77,11 @@ void main() {
     });
 
     test('all API strings should be unique', () {
-      final apiStrings =
-          PreciseRefType.values.map((t) => t.toApiString()).toList();
+      final apiStrings = <String>[
+        for (final type in PreciseRefType.values) type.toApiString(),
+        PreciseRefType.character.toApiString(preferSameOutfit: true),
+        PreciseRefType.characterAndStyle.toApiString(preferSameOutfit: true),
+      ];
       expect(apiStrings.toSet().length, equals(apiStrings.length));
     });
 

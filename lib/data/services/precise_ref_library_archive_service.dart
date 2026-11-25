@@ -60,6 +60,7 @@ class PreciseRefLibraryArchiveService {
         'id': entry.id,
         'name': entry.name,
         'type': entry.type.name,
+        'preferSameOutfit': entry.preferSameOutfit,
         'strength': entry.strength,
         'fidelity': entry.fidelity,
         'isFavorite': entry.isFavorite,
@@ -137,6 +138,7 @@ class PreciseRefLibraryArchiveService {
           type: record.type,
           strength: record.strength,
           fidelity: record.fidelity,
+          preferSameOutfit: record.preferSameOutfit,
           isFavorite: record.isFavorite,
           usedCount: record.usedCount,
           lastUsedAt: record.lastUsedAt,
@@ -265,6 +267,7 @@ class _ArchiveRecord {
     required this.type,
     required this.strength,
     required this.fidelity,
+    required this.preferSameOutfit,
     required this.isFavorite,
     required this.usedCount,
     required this.lastUsedAt,
@@ -278,6 +281,7 @@ class _ArchiveRecord {
   final PreciseRefType type;
   final double strength;
   final double fidelity;
+  final bool preferSameOutfit;
   final bool isFavorite;
   final int usedCount;
   final DateTime? lastUsedAt;
@@ -306,6 +310,7 @@ class _ArchiveRecord {
     final sourceId = value['id'];
     final strength = value['strength'];
     final fidelity = value['fidelity'];
+    final preferSameOutfit = value['preferSameOutfit'];
     final resource = value['resource'];
     if (sourceId is! String ||
         !RegExp(
@@ -319,6 +324,7 @@ class _ArchiveRecord {
         !strength.toDouble().isFinite ||
         fidelity is! num ||
         !fidelity.toDouble().isFinite ||
+        (preferSameOutfit != null && preferSameOutfit is! bool) ||
         value['isFavorite'] is! bool ||
         value['usedCount'] is! int ||
         (value['usedCount']! as int) < 0 ||
@@ -338,6 +344,7 @@ class _ArchiveRecord {
       type: type,
       strength: (value['strength']! as num).toDouble(),
       fidelity: (value['fidelity']! as num).toDouble(),
+      preferSameOutfit: preferSameOutfit as bool? ?? false,
       isFavorite: value['isFavorite']! as bool,
       usedCount: value['usedCount']! as int,
       lastUsedAt: parsedLastUsedAt,

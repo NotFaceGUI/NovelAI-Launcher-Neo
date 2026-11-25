@@ -15,9 +15,30 @@ void main() {
       expect(entry.type, PreciseRefType.characterAndStyle);
       expect(entry.strength, 1.0);
       expect(entry.fidelity, 1.0);
+      expect(entry.preferSameOutfit, isFalse);
       expect(entry.isFavorite, isFalse);
       expect(entry.usedCount, 0);
       expect(entry.lastUsedAt, isNull);
+    });
+
+    test('create 保留 Outfit 与 Prefer same outfit', () {
+      final entry = PreciseRefLibraryEntry.create(
+        name: 'outfit',
+        imagePath: 'outfit.png',
+        type: PreciseRefType.character,
+        preferSameOutfit: true,
+      );
+
+      expect(entry.type, PreciseRefType.character);
+      expect(entry.preferSameOutfit, isTrue);
+      expect(entry.preciseApiType, 'character_mainoutfit');
+
+      final outfit = PreciseRefLibraryEntry.create(
+        name: 'outfit-only',
+        imagePath: 'outfit-only.png',
+        type: PreciseRefType.outfit,
+      );
+      expect(outfit.preciseApiType, 'costume');
     });
 
     test('type 索引越界时回退为 characterAndStyle', () {

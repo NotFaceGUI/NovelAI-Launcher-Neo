@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/constants/api_constants.dart';
 import '../../../core/constants/model_capabilities.dart';
+import '../../../core/enums/precise_reference_image_mode.dart';
 import '../../../core/enums/precise_ref_type.dart';
 import '../../../core/storage/local_storage_service.dart';
 import '../../../core/utils/app_logger.dart';
@@ -251,11 +252,15 @@ final class GenerationStateSnapshot {
     'preciseReferences': preciseReferences
         .map(
           (reference) => <String, Object?>{
-            'type': reference.type.toApiString(),
+            'type': reference.preciseApiType,
+            'preferSameOutfit': reference.preferSameOutfit,
             'strength': reference.strength,
             'fidelity': reference.fidelity,
             'enabled': reference.enabled,
             'image': reference.image,
+            'normalizedMode': NAIApiUtils.normalizedModeOf(
+              reference.image,
+            )?.name,
             'isNormalizedPng': NAIApiUtils.isKnownNormalizedPreciseReferencePng(
               reference.image,
             ),
@@ -329,17 +334,29 @@ final class GenerationStateRestoreResult {
       final image = value['image'] as Uint8List?;
       if (image == null || image.isEmpty) continue;
       final typeName = value['type'] as String?;
+      final parsedType = PreciseRefType.parseApi(typeName);
+      final modeName = value['normalizedMode'] as String?;
+      final normalizedMode = modeName == null
+          ? (value['isNormalizedPng'] as bool? ?? false
+                ? PreciseReferenceImageMode.directorCanvas
+                : null)
+          : PreciseReferenceImageMode.values
+                .where((mode) => mode.name == modeName)
+                .firstOrNull;
+      final storedImage = normalizedMode == null
+          ? image
+          : NAIApiUtils.markNormalizedPreciseReferencePng(
+              image,
+              mode: normalizedMode,
+            );
       precise.add(
         PreciseReference(
-          image: value['isNormalizedPng'] as bool? ?? false
-              ? NAIApiUtils.markNormalizedPreciseReferencePng(image)
-              : image,
-          type: PreciseRefType.values.firstWhere(
-            (item) => item.toApiString() == typeName,
-            orElse: () => PreciseRefType.character,
-          ),
+          image: storedImage,
+          type: parsedType.type,
           strength: (value['strength'] as num?)?.toDouble() ?? 1.0,
           fidelity: (value['fidelity'] as num?)?.toDouble() ?? 1.0,
+          preferSameOutfit:
+              value['preferSameOutfit'] as bool? ?? parsedType.preferSameOutfit,
           enabled: value['enabled'] as bool? ?? true,
         ),
       );
@@ -396,10 +413,12 @@ String _encodeStateJson(Map<String, Object?> input) {
         final image = raw['image'] as Uint8List?;
         return <String, Object?>{
           'type': raw['type'],
+          'preferSameOutfit': raw['preferSameOutfit'] as bool? ?? false,
           'strength': raw['strength'],
           'fidelity': raw['fidelity'],
           'enabled': raw['enabled'] as bool? ?? true,
           'imageBase64': image == null ? null : base64Encode(image),
+          'normalizedMode': raw['normalizedMode'],
           'isNormalizedPng': raw['isNormalizedPng'] as bool? ?? false,
         };
       })
@@ -461,10 +480,12 @@ Map<String, Object?> _decodeStateJson(String source) {
     precise.add({
       'type':
           value['type'] as String? ?? PreciseRefType.character.toApiString(),
+      'preferSameOutfit': value['preferSameOutfit'] as bool? ?? false,
       'strength': (value['strength'] as num?)?.toDouble() ?? 1.0,
       'fidelity': (value['fidelity'] as num?)?.toDouble() ?? 1.0,
       'enabled': value['enabled'] as bool? ?? true,
       'image': image,
+      'normalizedMode': value['normalizedMode'],
       'isNormalizedPng': value['isNormalizedPng'] as bool? ?? false,
     });
   }

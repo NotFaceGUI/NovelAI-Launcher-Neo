@@ -23,6 +23,7 @@ class PreciseRefLibraryImportSource {
     this.type = PreciseRefType.characterAndStyle,
     this.strength = 1.0,
     this.fidelity = 1.0,
+    this.preferSameOutfit = false,
   });
 
   final PreciseRefLibraryBytesLoader loadBytes;
@@ -30,6 +31,7 @@ class PreciseRefLibraryImportSource {
   final PreciseRefType type;
   final double strength;
   final double fidelity;
+  final bool preferSameOutfit;
 }
 
 class PreciseRefLibraryBatchImportResult {
@@ -213,6 +215,7 @@ class PreciseRefLibraryNotifier extends _$PreciseRefLibraryNotifier {
     PreciseRefType type = PreciseRefType.characterAndStyle,
     double strength = 1.0,
     double fidelity = 1.0,
+    bool preferSameOutfit = false,
   }) async {
     await _ensureInitialized();
     try {
@@ -222,6 +225,7 @@ class PreciseRefLibraryNotifier extends _$PreciseRefLibraryNotifier {
         type: type,
         strength: strength,
         fidelity: fidelity,
+        preferSameOutfit: preferSameOutfit,
       );
       state = state.copyWith(entries: [...state.entries, entry], error: null);
       _applyFilters();
@@ -270,6 +274,7 @@ class PreciseRefLibraryNotifier extends _$PreciseRefLibraryNotifier {
             type: source.type,
             strength: source.strength,
             fidelity: source.fidelity,
+            preferSameOutfit: source.preferSameOutfit,
           );
         } catch (e, s) {
           failedCount++;
@@ -305,6 +310,7 @@ class PreciseRefLibraryNotifier extends _$PreciseRefLibraryNotifier {
     PreciseRefType? type,
     double? strength,
     double? fidelity,
+    bool? preferSameOutfit,
     bool? isFavorite,
   }) async {
     await _ensureInitialized();
@@ -314,6 +320,7 @@ class PreciseRefLibraryNotifier extends _$PreciseRefLibraryNotifier {
       type: type,
       strength: strength,
       fidelity: fidelity,
+      preferSameOutfit: preferSameOutfit,
       isFavorite: isFavorite,
     );
     if (updated != null) {

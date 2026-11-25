@@ -79,6 +79,23 @@ class PromptToolbox {
               'supports_characters': capabilities.maxCharacters > 0,
               'supports_character_interaction':
                   capabilities.supportsCharacterInteraction,
+              'precise_reference': {
+                'supported': capabilities.supportsPreciseReference,
+                'types': capabilities.supportsOutfitReference
+                    ? const [
+                        'character',
+                        'style',
+                        'characterAndStyle',
+                        'outfit',
+                      ]
+                    : const ['character', 'style', 'characterAndStyle'],
+                'prefer_same_outfit': capabilities.supportsOutfitReference,
+                'strength_max': capabilities.preciseReferenceStrengthMax,
+                'fidelity': capabilities.supportsPreciseReferenceFidelity,
+                'supports_inpainting':
+                    capabilities.supportsPreciseReferenceInpainting,
+                'max_references': capabilities.maxPreciseReferences,
+              },
               'character_layout_mode': config.globalAiChoice
                   ? 'ai_choice'
                   : 'custom',
@@ -932,7 +949,9 @@ class PromptToolbox {
   /// 角色提示词里的互动声明，未设置时为空（不占用模型注意力）。
   static Map<String, dynamic> _interactionJson(String prompt) {
     final interaction = CharacterInteraction.parse(prompt);
-    return interaction == null ? const {} : {'interaction': interaction.toJson()};
+    return interaction == null
+        ? const {}
+        : {'interaction': interaction.toJson()};
   }
 
   Future<AgentToolResult> _readSkill(Map<String, dynamic> args) async {

@@ -50,6 +50,7 @@ class PreciseRefCloudSyncAdapter extends ValidatingCloudSyncDataAdapter
         data: {
           'name': entry.name,
           'type': entry.type.name,
+          'preferSameOutfit': entry.preferSameOutfit,
           'strength': entry.strength,
           'fidelity': entry.fidelity,
           'isFavorite': entry.isFavorite,
@@ -75,6 +76,8 @@ class PreciseRefCloudSyncAdapter extends ValidatingCloudSyncDataAdapter
         data['type'] is! String ||
         data['strength'] is! num ||
         data['fidelity'] is! num ||
+        (data['preferSameOutfit'] != null &&
+            data['preferSameOutfit'] is! bool) ||
         data['isFavorite'] is! bool ||
         data['usedCount'] is! int ||
         data['createdAt'] is! String ||
@@ -115,6 +118,7 @@ class PreciseRefCloudSyncAdapter extends ValidatingCloudSyncDataAdapter
         ),
         strength: (data['strength']! as num).toDouble(),
         fidelity: (data['fidelity']! as num).toDouble(),
+        preferSameOutfit: data['preferSameOutfit'] as bool? ?? false,
         isFavorite: data['isFavorite']! as bool,
         usedCount: data['usedCount']! as int,
         lastUsedAt: _date(data['lastUsedAt']),

@@ -661,26 +661,35 @@ class GenerationParamsNotifier extends _$GenerationParamsNotifier {
     required PreciseRefType type,
     double strength = 1.0,
     double fidelity = 1.0,
+    bool preferSameOutfit = false,
     bool isNormalizedPng = false,
   }) {
+    final capabilities = state.capabilities;
+    if (state.preciseReferences.length >= capabilities.maxPreciseReferences) {
+      return;
+    }
     if (isNormalizedPng) {
       NAIApiUtils.markNormalizedPreciseReferencePng(image);
     }
+    final effectiveStrength = strength
+        .clamp(0.0, capabilities.preciseReferenceStrengthMax)
+        .toDouble();
     state = state.copyWith(
       preciseReferences: [
         ...state.preciseReferences,
         PreciseReference(
           image: image,
           type: type,
-          strength: strength,
+          strength: effectiveStrength,
           fidelity: fidelity,
+          preferSameOutfit: preferSameOutfit,
         ),
       ],
     );
     _scheduleGenerationStateSave(immediate: true);
   }
 
-  /// 添加原始图片形式的 Precise Reference，并在后台完成 Director PNG 规范化。
+  /// 添加原始图片形式的 Precise Reference，并在后台按当前模型完成规范化。
   ///
   /// 原图会先进入状态，保证用户快速点击生成时请求构建器仍能读取到参考图；
   /// 规范化完成后再替换为可直接提交的 PNG，避免后续生成重复处理。
@@ -689,6 +698,7 @@ class GenerationParamsNotifier extends _$GenerationParamsNotifier {
     required PreciseRefType type,
     double strength = 1.0,
     double fidelity = 1.0,
+    bool preferSameOutfit = false,
   }) async {
     final index = state.preciseReferences.length;
     addPreciseReference(
@@ -696,9 +706,16 @@ class GenerationParamsNotifier extends _$GenerationParamsNotifier {
       type: type,
       strength: strength,
       fidelity: fidelity,
+      preferSameOutfit: preferSameOutfit,
     );
+    if (state.preciseReferences.length == index) {
+      return;
+    }
 
-    final normalization = await _vibeReferences.normalizePrecisePng(image);
+    final normalization = await _vibeReferences.normalizePrecisePng(
+      image,
+      model: state.model,
+    );
     final normalizedImage = normalization.image;
     if (normalizedImage == null ||
         _isDisposed ||
@@ -730,15 +747,21 @@ class GenerationParamsNotifier extends _$GenerationParamsNotifier {
     PreciseRefType? type,
     double? strength,
     double? fidelity,
+    bool? preferSameOutfit,
     bool? enabled,
   }) {
     if (index < 0 || index >= state.preciseReferences.length) return;
     final newList = [...state.preciseReferences];
     final current = newList[index];
+    final effectiveStrength = strength?.clamp(
+      0.0,
+      state.capabilities.preciseReferenceStrengthMax,
+    );
     newList[index] = current.copyWith(
       type: type ?? current.type,
-      strength: strength ?? current.strength,
+      strength: effectiveStrength?.toDouble() ?? current.strength,
       fidelity: fidelity ?? current.fidelity,
+      preferSameOutfit: preferSameOutfit ?? current.preferSameOutfit,
       enabled: enabled ?? current.enabled,
     );
     state = state.copyWith(preciseReferences: newList);
@@ -750,9 +773,20 @@ class GenerationParamsNotifier extends _$GenerationParamsNotifier {
     if (index < 0 || index >= state.preciseReferences.length) return;
     final newList = [...state.preciseReferences];
     final current = newList[index];
-    newList[index] = current.copyWith(type: type);
+    newList[index] = current.copyWith(
+      type: type,
+      preferSameOutfit: type.canPreferSameOutfit && current.preferSameOutfit,
+    );
     state = state.copyWith(preciseReferences: newList);
     _scheduleGenerationStateSave(immediate: true);
+  }
+
+  /// 更新 “Prefer same outfit”（V5 的 Character / CharacterAndStyle）。
+  void updatePreciseReferencePreferSameOutfit(int index, bool value) {
+    if (index < 0 || index >= state.preciseReferences.length) return;
+    final current = state.preciseReferences[index];
+    if (!current.type.canPreferSameOutfit) return;
+    updatePreciseReference(index, preferSameOutfit: value);
   }
 
   /// 清除所有 Precise Reference

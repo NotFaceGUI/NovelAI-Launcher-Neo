@@ -27,8 +27,10 @@ extension ImageGenerationActionExtension on ImageGenerationAction {
   }
 }
 
-/// Precise Reference 配置 (仅 V4+ 模型支持)
-/// 支持 Character/Style/CharacterAndStyle 三种类型
+/// Precise Reference 配置 (V4.5 / V5 支持)
+///
+/// V4.5 提供 Character/Style/CharacterAndStyle；V5 额外提供 Outfit，并允许
+/// Character / CharacterAndStyle 开启 “Prefer same outfit”。
 @freezed
 class PreciseReference with _$PreciseReference {
   const factory PreciseReference({
@@ -38,15 +40,24 @@ class PreciseReference with _$PreciseReference {
     /// Precise Reference 类型
     required PreciseRefType type,
 
-    /// 参考强度（数值输入不设前端上下限，滑条范围 0-1）
+    /// 参考强度（V4.5 滑条 0-1，V5 滑条 0-5）
     @Default(1.0) double strength,
 
-    /// 保真度（数值输入不设前端上下限，滑条范围 0-1）
+    /// 保真度（V4.5 滑条 0-1；V5 已移除，请求固定按 1.0 处理）
     @Default(1.0) double fidelity,
+
+    /// 是否沿用参考角色的服装（V5 专属，仅 Character / CharacterAndStyle）。
+    @Default(false) bool preferSameOutfit,
 
     /// 是否参与下一次生成请求。
     @Default(true) bool enabled,
   }) = _PreciseReference;
+}
+
+extension PreciseReferenceApi on PreciseReference {
+  /// 官方 `director_reference_descriptions` 使用的类型串。
+  String get preciseApiType =>
+      type.toApiString(preferSameOutfit: preferSameOutfit);
 }
 
 /// 多角色提示词配置 (仅 V4 模型支持)

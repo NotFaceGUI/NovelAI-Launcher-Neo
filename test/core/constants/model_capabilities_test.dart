@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nai_launcher/core/constants/api_constants.dart';
 import 'package:nai_launcher/core/constants/model_capabilities.dart';
+import 'package:nai_launcher/core/enums/precise_reference_image_mode.dart';
 
 void main() {
   group('ModelCapabilityRegistry.of', () {
@@ -293,12 +294,38 @@ void main() {
       );
     });
 
-    test('V5 keeps vibe transfer and precise reference hidden', () {
+    test('V5 keeps vibe transfer hidden and exposes precise reference', () {
       final caps = ModelCapabilityRegistry.of(ImageModels.v5StagingKey);
 
       expect(caps.supportsVibeTransfer, isFalse);
-      expect(caps.supportsPreciseReference, isFalse);
+      expect(caps.supportsPreciseReference, isTrue);
+      expect(caps.supportsOutfitReference, isTrue);
+      expect(caps.supportsPreciseReferenceFidelity, isFalse);
+      expect(caps.supportsPreciseReferenceInpainting, isFalse);
+      expect(caps.preciseReferenceStrengthMax, 5.0);
+      expect(caps.maxPreciseReferences, 16);
+      expect(
+        caps.preciseReferenceImageMode,
+        PreciseReferenceImageMode.aspectBucket,
+      );
       expect(ImageModels.isV45Model(ImageModels.v5StagingKey), isFalse);
+    });
+
+    test('V4.5 precise reference keeps fidelity and inpainting', () {
+      final caps = ModelCapabilityRegistry.of(
+        ImageModels.animeDiffusionV45Full,
+      );
+
+      expect(caps.supportsPreciseReference, isTrue);
+      expect(caps.supportsOutfitReference, isFalse);
+      expect(caps.supportsPreciseReferenceFidelity, isTrue);
+      expect(caps.supportsPreciseReferenceInpainting, isTrue);
+      expect(caps.preciseReferenceStrengthMax, 1.0);
+      expect(caps.maxPreciseReferences, 16);
+      expect(
+        caps.preciseReferenceImageMode,
+        PreciseReferenceImageMode.directorCanvas,
+      );
     });
 
     test('V5 exposes the production feature set', () {
@@ -415,10 +442,22 @@ void main() {
       expect(ImageModels.isV4Model(ImageModels.animeDiffusionV3), isFalse);
     });
 
-    test('precise reference stays limited to the V4.5 family', () {
+    test('precise reference covers V4.5 and V5 but not V4', () {
       expect(
         ModelCapabilityRegistry.of(
           ImageModels.animeDiffusionV45Full,
+        ).supportsPreciseReference,
+        isTrue,
+      );
+      expect(
+        ModelCapabilityRegistry.of(
+          ImageModels.animeDiffusionV5Full,
+        ).supportsPreciseReference,
+        isTrue,
+      );
+      expect(
+        ModelCapabilityRegistry.of(
+          ImageModels.animeDiffusionV5Curated,
         ).supportsPreciseReference,
         isTrue,
       );

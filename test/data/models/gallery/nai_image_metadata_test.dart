@@ -1058,6 +1058,57 @@ void main() {
       expect(metadata.preciseReferences[0].fidelity, 0.8);
     });
 
+    test('fromNaiComment should parse V5 outfit reference variants', () {
+      final metadata = NaiImageMetadata.fromNaiComment({
+        'Comment': jsonEncode({
+          'prompt': '1girl',
+          'uc': 'bad hands',
+          'director_reference_images': [
+            base64Encode([1]),
+            base64Encode([2]),
+            base64Encode([3]),
+          ],
+          'director_reference_descriptions': [
+            {
+              'caption': {'base_caption': 'costume', 'char_captions': []},
+              'legacy_uc': false,
+            },
+            {
+              'caption': {
+                'base_caption': 'character_mainoutfit',
+                'char_captions': [],
+              },
+              'legacy_uc': false,
+            },
+            {
+              'caption': {
+                'base_caption': 'character&style_anyoutfit',
+                'char_captions': [],
+              },
+              'legacy_uc': false,
+            },
+          ],
+          'director_reference_strengths': [2.5, 1.0, 4.0],
+          'director_reference_secondary_strengths': [0.0, 0.0, 0.0],
+        }),
+        'Software': 'NovelAI',
+        'Source': 'NovelAI Diffusion V5 DB276663',
+      });
+
+      expect(metadata.preciseReferences, hasLength(3));
+      expect(metadata.preciseReferences[0].type, PreciseRefType.outfit);
+      expect(metadata.preciseReferences[0].preferSameOutfit, isFalse);
+      expect(metadata.preciseReferences[1].type, PreciseRefType.character);
+      expect(metadata.preciseReferences[1].preferSameOutfit, isTrue);
+      expect(
+        metadata.preciseReferences[2].type,
+        PreciseRefType.characterAndStyle,
+      );
+      expect(metadata.preciseReferences[2].preferSameOutfit, isTrue);
+      expect(metadata.preciseReferences[0].strength, 2.5);
+      expect(metadata.preciseReferences[2].strength, 4.0);
+    });
+
     test('fromNaiComment should preserve uncapped precise parameters', () {
       final referenceImage = base64Encode([1, 2, 3, 4]);
       final metadata = NaiImageMetadata.fromNaiComment({

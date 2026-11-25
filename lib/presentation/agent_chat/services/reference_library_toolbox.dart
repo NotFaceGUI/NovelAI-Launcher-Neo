@@ -44,6 +44,7 @@ class ReferenceLibraryToolbox {
             {
               'index': indexed.$1,
               'type': indexed.$2.type.name,
+              'prefer_same_outfit': indexed.$2.preferSameOutfit,
               'strength': indexed.$2.strength,
               'fidelity': indexed.$2.fidelity,
               'enabled': indexed.$2.enabled,

@@ -34,6 +34,7 @@ class _FailingStorage extends PreciseRefLibraryStorageService {
     PreciseRefType type = PreciseRefType.characterAndStyle,
     double strength = 1.0,
     double fidelity = 1.0,
+    bool preferSameOutfit = false,
   }) {
     throw const FileSystemException('disk full');
   }
